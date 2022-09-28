@@ -6,8 +6,19 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
+library(tidyverse)
+library(janitor)
+
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Overview
+New York City has hundreds of public schools, and is the largest school district in the country. These schools all report data in a variety of categories, including 
 
+```{r}
+rawdata <- read_csv('~/R/pstat131/data/nycschooldata.csv')
+shsatdf <- read_csv('~/R/pstat131/data/shsat.csv')
+
+#colSums(!is.na(rawdata))
+
+head(shsatdf)
+```

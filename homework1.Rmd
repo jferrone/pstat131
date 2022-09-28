@@ -1,0 +1,31 @@
+---
+title: "Homework 1"
+subtitle: "PSTAT 131"
+author: "John Ferrone"
+date: "10/2/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(janitor)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Machine Learning Main Ideaas
+
+#### Question 1:
+*Define supervised and unsupervised learning. What are the difference(s) between them?*
+
+**Supervised learning**: involves a statistical model built for predicting an output based on predictor(s). 
+
+**Unsupervised learning**: involves an inputs without the help of a supervising output, meaning the relationships and structure come from the data.
+
+The difference is the existence of an output, or a training set, which can be used to determine the accuracy of the models.
+
+#### Question 2:
+*Explain the difference between a regression model and a classification model, specifically in the context of machine learning.*
+
+
