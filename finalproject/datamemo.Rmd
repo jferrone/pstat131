@@ -20,5 +20,5 @@ shsatdf <- read_csv('~/R/pstat131/data/shsat.csv')
 
 #colSums(!is.na(rawdata))
 
-head(shsatdf)
+head(rawdata)
 ```

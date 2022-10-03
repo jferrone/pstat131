@@ -9,6 +9,7 @@ output: html_document
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(tidymodels)
+library(corrplot)
 library(janitor)
 
 knitr::opts_chunk$set(echo = TRUE)
@@ -19,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE)
 #### Question 1:
 *Define supervised and unsupervised learning. What are the difference(s) between them?*
 
-**Supervised learning**: involves a statistical model built for predicting an output based on predictor(s). 
+**Supervised learning**: involves a statistical model built for predicting an oautput based on predictor(s). 
 
 **Unsupervised learning**: involves an inputs without the help of a supervising output, meaning the relationships and structure come from the data.
 
@@ -28,4 +29,94 @@ The difference is the existence of an output, or a training set, which can be us
 #### Question 2:
 *Explain the difference between a regression model and a classification model, specifically in the context of machine learning.*
 
+The difference between the two models is that regression models predict a *continuous* or *qualitative* output while *classification* problems predict a *categorical* or *qualitative* output which is non-numeric.
 
+#### Question 3:
+*Name two commonly used metrics for regression ML problems. Name two commonly used metrics for classification ML problems.*
+
+**Regression**:
+
+* MSE (Mean Squared Error) using training and test data sets. Lower MSE implied that the model is a good fit, while high MSE indicates that it is not
+(ISLR 29).
+
+* Finding a model which has a both low variance and low bias is important and is another metric which can help determine whether a fit is good (ISLR 33).
+
+**Classification**:
+
+* The Bayes classifier, a simple method of classification which uses predictors to pick and assign observations to the most likely class (ISLR 37).
+
+* The K-Nearest Neighbors classifier estimates the conditional distribution of $Y$ given a predictor $X$ and classifies observations based on the highest *estimated* probability (ISLR 39).
+
+#### Question 4:
+*As discussed, statistical models can be used for different purposes. These purposes can generally be classified into the following three categories. Provide a brief description of each.*
+
+**Descriptive models**: used to emphasize a trend in the data, such as a line on a scatterplot (Lecture 1 39)
+
+**Inferential models**: aims to predict $Y$ with minimum reducible error (Lecture 1 39)
+
+**Predictive models**: aims to test theories and state the relationship between outcome and predictor(s) (Lecture 1 39)
+
+#### Question 5:
+*Predictive models are frequently used in machine learning, and they can usually be described as either mechanistic or empirically-driven. Answer the following questions.*
+
+* *Define mechanistic. Define empirically-driven. How do these model types differ? How are they similar?*
+
+**Mechanistic**: Mechanistic, or parametric models are distinct due to assumptions made for $f$, such as $\beta_0 + \beta_1 + \dots$ but won't match true unknown $f$. Adding parameters increases flexibility, but too many leads to overfitting (Lecture 1 38).
+
+**Empirically-Driven**: Non-parametric models make no assumptions about $f$, requires a larger number of observations, and are much more flexible by default but again often overfit the data (Lecture 1 38).
+
+* *In general, is a mechanistic or empirically-driven model easier to understand? Explain your choice.*
+
+In general, it is easier to understand a mechanistic model as they tend to be the simpler model types.
+
+* *Describe how the bias-variance tradeoff is related to the use of mechanistic or empirically-driven models.*
+
+Bias-variance trade-off is related to the use of these models as it is an excellent way to determine if a model is truly fit well, or if it is overfitted. An overfitted model would have much larger variance and bias.
+
+#### Question 6:
+*A political candidate's campaign has collected some detailed voter history data from their constituents. The campaign is interested in two questions:*
+
+* *Given a voter's profile/data, how likely is it that they will vote in favor of the candidate?*
+
+* *How would a voter's likelihood of support for the candidate change if they had personal contact with the candidate?*
+
+*Classify each question as either predictive or inferential. Explain your reasoning for each.*
+
+1. Predictive, as this is using known data in order to choose the most likely outcome of how they will vote.
+
+2. Inferential, as this is using information known about the candidate which can not necessarily be quantified.
+
+#### Exercise 1:
+```{r}
+ggplot(mpg, aes(x = hwy)) + 
+  geom_histogram()
+```
+
+There seems to be two primary clusters of highway miles per gallon, between about 16-20 and 24-28. Outside of these clusters there tends to be much smaller counts of vehicles.
+
+#### Exercise 2:
+```{r}
+ggplot(mpg, aes(x = hwy, y = cty)) +
+  geom_point()
+```
+There is a clear linear relationship between highway miles per gallon and city miles per gallon, with both increasing as the other does. This means they have a positive relationship and could likely be modeled using a simple linear model.
+
+#### Exercise 3:
+```{r}
+ggplot(mpg, aes(y = fct_infreq(manufacturer))) + geom_bar()
+```
+The manufacturer which produced the most cars is Dodge and the least is Lincoln.
+
+#### Exercise 4:
+```{r}
+ggplot(mpg, aes(x = hwy, group = cyl)) + geom_boxplot()
+```
+There is a negative trend between highway miles per gallon and cylinders, with `hwy` decreasing as `cyl` increases.
+
+#### Exercise 5
+```{r}
+numcars = select_if(mpg, is.numeric)
+M = cor(numcars)
+corrplot(M, method = 'number', type = 'lower')
+```
+This plot displays various correlations, such as positive ones between `cyl` and `displ` as well as `hwy` and `cty`. Negative correlations exist between `hwy` and `cyl`, `hwy` and `displ`, `cty` and `displ`, as well as `cty` and `cyl`.
