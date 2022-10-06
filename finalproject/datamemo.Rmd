@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r results='hide'}
-rawdata <- read_csv('~/R/pstat131/data/nycschooldata.csv')
+rawdata <- read_csv('data/nycschooldata.csv')
 ```
 
 ```{r}
