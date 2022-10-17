@@ -1,31 +1,17 @@
----
-title: "Data Exploration"
-author: "John Ferrone"
-date: "2022-10-06"
-output: html_document
----
-
-```{r setup, include=FALSE}
+# Data Exploration for Final Project
 library(tidyverse)
 library(tidymodels)
 library(corrplot)
 library(janitor)
 
-knitr::opts_chunk$set(echo = TRUE)
-```
-
-#### Reading the Data
-
-```{r}
-rawdata <- read_csv('data/nycschooldata.csv')
+rawdata <- read_csv('finalproject/data/nycschooldata.csv')
 
 school_df <- rawdata %>%
   clean_names %>%
   select(4:41) %>%
   na_if('N/A') %>%
   mutate(
-    #community_school = ifelse(community_school == 'Yes', 1, 0),
-    economic_need_index = as.numeric(economic_need_index),
+    community_school = ifelse(community_school == 'Yes', 1, 0),
     school_income_estimate = as.numeric(
       gsub('[$,]', '', school_income_estimate)
       ),
@@ -57,8 +43,8 @@ school_df <- rawdata %>%
       gsub('[%]', '', strong_family_community_ties_percent)
     ) / 100,
     trust = as.numeric(gsub('[%]', '', trust_percent)) / 100,
-    ela_proficiency = as.numeric(average_ela_proficiency),
-    math_proficiency = as.numeric(average_math_proficiency),
+    ela_proficiency = as.numeric(average_ela_proficiency) / 100,
+    math_proficiency = as.numeric(average_math_proficiency) / 100,
     avg_proficiency = (ela_proficiency + math_proficiency) / 2
   ) %>%
   select(
@@ -82,27 +68,3 @@ eda_p1 <- ggplot(school_df,
 ggplot(school_df, aes(x = school_income_estimate)) + geom_histogram()
 
 count(school_df, grades)
-```
-
-```{r}
-school_df
-ggplot(school_df, aes(community_school, avg_proficiency)) + 
-  geom_boxplot()
-# MAJOR INDICATOR
-```
-
-```{r}
-ggplot(school_df, 
-       aes(x = avg_proficiency, y = economic_need_index, 
-       color = school_income_estimate)
-       ) +
-  geom_point() + scale_y_continuous()
-# MAJOR INDICATOR
-```
-
-```{r}
-ggplot(school_df, aes(avg_proficiency, latitude)) + geom_point()
-ggplot(school_df, aes(avg_proficiency, longitude)) + geom_point()
-```
-
-

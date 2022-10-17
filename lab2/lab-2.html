@@ -1790,9 +1790,17 @@ diamonds_test &lt;- testing(diamonds_split)</code></pre>
 <h4>Activities:</h4>
 <ul>
 <li><p>How many observations are now in the training and testing sets,
-respectively? Report the exact number, not proportion.</p></li>
+respectively? Report the exact number, not proportion.</p>
+<ul>
+<li><em>Training Set: 43,152</em></li>
+<li><em>Test Set: 10,788</em></li>
+</ul></li>
 <li><p>What do you think the <code>strata = price</code> argument does?
-Take a guess, then use <code>?initial_split</code> to verify.</p></li>
+Take a guess, then use <code>?initial_split</code> to verify.</p>
+<ul>
+<li><em><code>strata = price</code> sets the output variable.</em></li>
+<li><em>The variable used to conduct stratified sampling.</em></li>
+</ul></li>
 </ul>
 </div>
 </div>
@@ -1831,9 +1839,22 @@ given to one of many machine learning model “engines.”</p>
 <div id="activities-6" class="section level4">
 <h4>Activities:</h4>
 <ul>
-<li>Use the Internet to find documentation about the possible
+<li><p>Use the Internet to find documentation about the possible
 <code>step</code> functions. Name three <code>step</code> functions that
-weren’t used here and describe what they do.</li>
+weren’t used here and describe what they do.</p>
+<ul>
+<li><em><code>step_date()</code> converts date data into factor or
+numeric variable(s)</em>^^1</li>
+<li><em><code>step_regex()</code> creates a new dummy variable based on
+a regular expression</em>^^2</li>
+<li>*<code>step_count()</code> creates a variable that counts instances
+of a regular expression patterin in text.^^3</li>
+</ul>
+<ol style="list-style-type: decimal">
+<li><a href="https://recipes.tidymodels.org/reference/step_date.html" class="uri">https://recipes.tidymodels.org/reference/step_date.html</a></li>
+<li><a href="https://www.rdocumentation.org/packages/recipes/versions/0.1.5/topics/step_regex" class="uri">https://www.rdocumentation.org/packages/recipes/versions/0.1.5/topics/step_regex</a></li>
+<li><a href="https://www.rdocumentation.org/packages/recipes/versions/0.1.17/topics/step_count" class="uri">https://www.rdocumentation.org/packages/recipes/versions/0.1.17/topics/step_count</a></li>
+</ol></li>
 </ul>
 <p>Next, we can specify the model engine that we want to fit:</p>
 <pre class="r"><code>lm_model &lt;- linear_reg() %&gt;% 
@@ -1870,11 +1891,20 @@ trying out a series of models or several different recipes later on.</p>
 <div id="activities-7" class="section level4">
 <h4>Activities:</h4>
 <ul>
-<li><p>Explain what the intercept represents.</p></li>
+<li><p>Explain what the intercept represents.</p>
+<ul>
+<li><em>The intercept represents the mean value if all the predictors
+were equal to zero.</em></li>
+</ul></li>
 <li><p>Describe the effect of <code>carat</code>. Is it a significant
 predictor of <code>price</code>? Holding everything else constant, what
 is the effect on <code>price</code> of a one-unit increase in
-<code>carat</code>?</p></li>
+<code>carat</code>?</p>
+<ul>
+<li><em>The most significant predictor of <code>price</code> is
+<code>carat</code>. If everything is held constant, a one-unit increase
+in <code>carat</code> increases price by 11,281.55</em></li>
+</ul></li>
 </ul>
 <p>Finally, we can calculate the <strong>training</strong> root mean
 squared error (RMSE).</p>
