@@ -52,8 +52,7 @@ Split the abalone data into a training set and a testing set. Use stratified sam
 *Remember that you'll need to set a seed at the beginning of the document to reproduce your results.*
 
 ```{r}
-abalone_split <- initial_split(abalone, prop = 0.80,
-                                strata = age)
+abalone_split <- initial_split(abalone, prop = 0.80, strata = age)
 abalone_train <- training(abalone_split)
 abalone_test <- testing(abalone_split)
 ```
@@ -69,12 +68,8 @@ Steps for your recipe:
 ```{r}
 set.seed(12281999)
 abalone_recipe <- recipe(age ~ ., data=abalone_train) %>% 
-  step_rm(rings) %>%
-  step_dummy(type)
-
-abalone_recipe
-
-head(abalone)
+  step_rm(rings)  %>%
+  step_dummy(all_nominal_predictors())
 ```
 
 2.  create interactions between
@@ -125,7 +120,6 @@ Now:
 lm_wflow <- workflow() %>%    #1
   add_model(lm_model) %>%     #2
   add_recipe(abalone_recipe)  #3
-
 ```
 
 ### Question 6
@@ -134,7 +128,9 @@ Use your `fit()` object to predict the age of a hypothetical female abalone with
 
 ```{r}
 lm_fit <- fit(lm_wflow, abalone_train)
-lm_fit
+cur_test <- data.frame(type = 'F', rings=NA, longest_shell = 0.50, diameter = 0.10, height = 0.30, whole_weight = 4, shucked_weight = 1, viscera_weight = 2, shell_weight = 1)
+
+predict(lm_fit, cur_test)
 ```
 
 ### Question 7
