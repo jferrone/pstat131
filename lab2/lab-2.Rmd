@@ -277,7 +277,9 @@ diamond_train_res %>%
 Now we attach a column with the actual observed `price` observations:
 
 ```{r}
-diamond_train_res <- bind_cols(diamond_train_res, diamonds_train %>% select(price))
+diamond_train_res <- bind_cols(
+  diamond_train_res, diamonds_train %>% select(price)
+  )
 diamond_train_res %>% 
   head()
 ```

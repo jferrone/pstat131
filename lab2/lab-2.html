@@ -1924,7 +1924,9 @@ diamond_train_res %&gt;%
 ## 6 -1373.</code></pre>
 <p>Now we attach a column with the actual observed <code>price</code>
 observations:</p>
-<pre class="r"><code>diamond_train_res &lt;- bind_cols(diamond_train_res, diamonds_train %&gt;% select(price))
+<pre class="r"><code>diamond_train_res &lt;- bind_cols(
+  diamond_train_res, diamonds_train %&gt;% select(price)
+  )
 diamond_train_res %&gt;% 
   head()</code></pre>
 <pre><code>## # A tibble: 6 × 2

@@ -9,6 +9,16 @@ output:
 ---
 
 ```{r setup, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(ISLR) # For the Smarket data set
+library(ISLR2) # For the Bikeshare data set
+library(discrim)
+library(poissonreg)
+library(corrr)
+library(klaR) # for naive bayes
+tidymodels_prefer()
+
 knitr::opts_chunk$set(echo = TRUE, message = FALSE,
                       warning = FALSE)
 ```
@@ -22,10 +32,6 @@ For this assignment, we will be working with part of a [Kaggle data set](https:/
 Load the data from `data/titanic.csv` into *R* and familiarize yourself with the variables it contains using the codebook (`data/titanic_codebook.txt`).
 
 ```{r}
-library(tidyverse)
-library(tidymodels)
-tidymodels_prefer()
-
 titanic <- read_csv('data/titanic.csv')
 head(titanic)
 ```
@@ -38,11 +44,6 @@ titanic$pclass <- as.factor(titanic$pclass)
 ```
 
 Make sure you load the `tidyverse` and `tidymodels`!
-
-```{r}
-library(tidyverse)
-library(tidymodels)
-```
 
 *Remember that you'll need to set a seed at the beginning of the document to reproduce your results.*
 

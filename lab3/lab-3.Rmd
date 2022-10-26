@@ -9,7 +9,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, 
                       warning = FALSE)
 ```
 
@@ -38,7 +38,7 @@ We will be examining the `Smarket` data set for this lab. It contains a number o
 
 #### Activities
 
-- Access the help page for `Smarket`. What does the `Direction` variable represent? What predictors do you think might be correlated with it?
+-   Access the help page for `Smarket`. What does the `Direction` variable represent? What predictors do you think might be correlated with it?
 
 To look at correlations among the continuous variables, we will use the `corrr` package. The `correlate()` function will calculate the correlation matrix between all the variables that it is given. We choose to remove `Direction,` as it is not numeric. Then we pass the results to rplot() to visualize the correlation matrix.
 
@@ -51,12 +51,9 @@ rplot(cor_Smarket)
 
 #### Activities
 
-- What do you notice from this correlation matrix?
-    **Only year and volume seem to be correlated.**
-- Do you need to worry about predictors being highly linearly correlated with each other?
-    **No, it is not likely that I need to worry about predictors being highly linearly correlated with each other, as there is no clear correlation.**
-- Does this matrix tell you anything about relationships between predictors and the outcome?
-    **No, it does not.**
+-   What do you notice from this correlation matrix? **Only year and volume seem to be correlated.**
+-   Do you need to worry about predictors being highly linearly correlated with each other? **No, it is not likely that I need to worry about predictors being highly linearly correlated with each other, as there is no clear correlation.**
+-   Does this matrix tell you anything about relationships between predictors and the outcome? **No, it does not.**
 
 We can also use `ggplot` and the `geom_tile()` function to create a heatmap-style correlation plot, with a few more lines of code:
 
@@ -81,8 +78,7 @@ ggplot(Smarket, aes(factor(Year), Volume)) +
 
 #### Activities
 
-- Describe the relationship between `Year` and `Volume`.
-    There is a slightly positive relationship between `Year` and `Volume`, as `Volume` seems to rise after each `Year`. Though, this is not a significant relationship and the short time span is not truly enough to show that this correlation truly exists.
+-   Describe the relationship between `Year` and `Volume`. There is a slightly positive relationship between `Year` and `Volume`, as `Volume` seems to rise after each `Year`. Though, this is not a significant relationship and the short time span is not truly enough to show that this correlation truly exists.
 
 Lastly, it's worth looking at the distribution of our outcome variable.
 
@@ -91,7 +87,6 @@ Smarket %>%
   ggplot(aes(x = Direction)) +
   geom_bar()
 ```
-
 
 Now we'll split the data, stratifying on the outcome, `Direction`:
 
@@ -148,8 +143,7 @@ log_fit %>%
 
 #### Activities
 
-- Are any of the predictors statistically significant?
-    **No, as the p-value is much larger than 0.05.**
+-   Are any of the predictors statistically significant? **No, as the p-value is much larger than 0.05.**
 
 ### Assessing Model Performance
 
@@ -178,9 +172,17 @@ augment(log_fit, new_data = smarket_train) %>%
 
 #### Activities
 
-- What do you notice from the confusion matrix?
-- Does the model tend to overpredict one class or the other? If so, which one?
-- Do you think the model is doing well? Why or why not?
+-   What do you notice from the confusion matrix?
+
+    *The model seems to predict incorrectly about half of the time.*
+
+-   Does the model tend to overpredict one class or the other? If so, which one?
+
+    *The model seems to over-predict up.*
+
+-   Do you think the model is doing well? Why or why not?
+
+    *No, the model does not seem to be performing well as it is only correct about half of the time based on the confusion matrix.*
 
 Let's calculate the accuracy of this model, or the average number of correct predictions it made on the **training** data. This is the model's **training error rate**.
 
@@ -231,7 +233,13 @@ lda_acc
 
 #### Activities
 
-- Compare the results of the LDA model to the results of the logistic regression model.
+-   Compare the results of the LDA model to the results of the logistic regression model.
+
+    ```{r}
+    lda_acc$.estimate - log_reg_acc$.estimate
+    ```
+
+    *There is very little difference between the accuracy of these two models.*
 
 ## QDA
 
@@ -323,8 +331,8 @@ results %>%
 
 #### Activities
 
-- Which model performed the best on the training data?
-- Which model would you choose? Why?
+-   Which model performed the best on the training data?
+-   Which model would you choose? Why?
 
 ## Fitting to Testing Data
 
@@ -360,10 +368,21 @@ augment(nb_fit, new_data = smarket_test) %>%
 
 #### Activities
 
-- What do the sensitivity and specificity values mean? Interpret them in terms of the concepts and data.
-- How well did the model perform on the **testing** data?
-- Why do you think the model performed like it did?
-- Do you think we could have done the initial split differently? Is there anything about the structure of the data that could inform the training/testing split?
+-   What do the sensitivity and specificity values mean? Interpret them in terms of the concepts and data.
+
+    *The **sensitivity** is the percentage of upwards mobility which was correctly predicted, while the **specificity** is the percentage of downwards mobility which is correctly predicted.*
+
+-   How well did the model perform on the **testing** data?
+
+    *It performed slightly worse on the testing data, at a level 2% lower.*
+
+-   Why do you think the model performed like it did?
+
+    *It is extremely hard to predict the stock market, and too many unquantifiable events occur which can affect the outcome each day. I.e. there is not enough data available to accurately predict the stock market.*
+
+-   Do you think we could have done the initial split differently? Is there anything about the structure of the data that could inform the training/testing split?
+
+    *The split could be done in such a way that it is over time. Stock data is ordered to some degree and the day to day events are not taken into account in this example.*
 
 ## Resources
 
