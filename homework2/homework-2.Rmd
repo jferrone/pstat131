@@ -88,13 +88,13 @@ abalone_recipe <- abalone_recipe %>%
 3.  center all predictors, and
 
 ```{r}
-abalone_recipe <- abalone_recipe %>% step_center()
+abalone_recipe <- abalone_recipe %>% step_center(all_numeric_predictors())
 ```
 
 4.  scale all predictors.
 
 ```{r}
-abalone_recipe <- abalone_recipe %>% step_scale()
+abalone_recipe <- abalone_recipe %>% step_scale(all_numeric_predictors())
 ```
 
 You'll need to investigate the `tidymodels` documentation to find the appropriate step functions to use.
