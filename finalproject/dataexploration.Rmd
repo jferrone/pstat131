@@ -121,7 +121,8 @@ ggplot(school_df, aes(x = percent_white, y = avg_proficiency)) +
 ```
 
 ```{r}
-ggplot(filter(school_df, attendance_rate > 0.7), aes(x = attendance_rate, y = avg_proficiency)) + geom_point
+ggplot(filter(school_df, attendance_rate > 0.7), aes(x = attendance_rate, y = avg_proficiency)) +
+  geom_point()
 # OUTLIERS REMOVED TO FOCUS ON THIS DISTRIBUTION
 ```
 
@@ -195,9 +196,17 @@ Creating Recipe #1 (Community School as a Dummy Variable)
 set.seed(101010)
 school_recipe <- recipe(avg_proficiency ~ ., data=school_train) %>%
   step_dummy(all_nominal_predictors()) %>%
-  step_rm(c('math_proficiency', 'ela_proficiency')) %>%
+  step_rm(c('math_proficiency', 'ela_proficiency', 'percent_asian', 
+            'percent_black', 'percent_hispanic', 'percent_white')) %>%
   step_impute_linear(school_income_estimate, 
-                     impute_with=imp_vars(economic_need_index))
+                     impute_with=imp_vars(
+                       economic_need_index, starts_with('community')
+                       )) %>%
+  step_interact(~ starts_with('community'):school_income_estimate +
+                  attendance_rate:chronically_absent) %>%
+  step_center() %>%
+  step_scale()
+
 
 lm_model <- linear_reg() %>%
   set_engine('lm')
@@ -246,5 +255,24 @@ school_metrics(school_train_res, truth=avg_proficiency, estimate=.pred)
 ```{r}
 school_test_metrics <- metric_set(rmse, rsq, mae)
 school_test_metrics(school_test_res, truth=avg_proficiency, estimate=.pred)
+```
+
+```{r}
+school_final
+```
+
+```{r}
+filter(school_df, attendance_rate > 0) %>%
+  ggplot(aes(x = attendance_rate, y = avg_proficiency, 
+             color = chronically_absent)) + 
+  geom_point()
+```
+
+```{r}
+school_train %>%
+  ggplot(
+    aes(x = school_income_estimate, y = avg_proficiency, 
+        shape = community_school)
+    ) + geom_point(alpha=0.4)
 ```
 
