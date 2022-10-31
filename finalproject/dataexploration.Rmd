@@ -204,8 +204,8 @@ school_recipe <- recipe(avg_proficiency ~ ., data=school_train) %>%
                        )) %>%
   step_interact(~ starts_with('community'):school_income_estimate +
                   attendance_rate:chronically_absent) %>%
-  step_center() %>%
-  step_scale()
+  step_center(all_numeric_predictors()) %>%
+  step_scale(all_numeric_predictors())
 
 
 lm_model <- linear_reg() %>%
@@ -216,6 +216,8 @@ lm_wkflow <- workflow() %>%
   add_recipe(school_recipe)
 
 lm_fit <- fit(lm_wkflow, school_train)
+
+school_recipe
 ```
 
 Metrics
@@ -248,13 +250,15 @@ school_test_res %>% ggplot(aes(x=.pred, y=avg_proficiency)) +
 ## Metrics
 ```{r}
 school_metrics <- metric_set(rmse, rsq, mae)
-school_metrics(school_train_res, truth=avg_proficiency, estimate=.pred)
+school_test_metrics <- metric_set(rmse, rsq, mae)
 ```
 
 ## Testing Metrics
 ```{r}
-school_test_metrics <- metric_set(rmse, rsq, mae)
-school_test_metrics(school_test_res, truth=avg_proficiency, estimate=.pred)
+bind_rows(
+  school_test_metrics(school_train_res, truth=avg_proficiency, estimate=.pred),
+  school_metrics(school_test_res, truth=avg_proficiency, estimate=.pred)
+)
 ```
 
 ```{r}
