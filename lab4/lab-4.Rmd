@@ -83,6 +83,7 @@ Carseats_test <- testing(Carseats_split)
 ```
 
 -   Verify that each set has the correct number of observations.
+
 ```{r}
 dim(Carseats_train)
 dim(Carseats_test)
@@ -137,12 +138,14 @@ Comparing these two values can give us a look into how generalizable the model i
 #### Activities
 
 -   Fit a linear regression to the `Carseats` data, predicting `Sales`.
+
 ```{r}
 lm_fit <- lm_spec %>%
   fit(Sales ~ ., data = Carseats_train)
 ```
 
 -   Calculate the training and testing RMSE for the `Carseats` regression.
+
 ```{r}
 print('Training Set:')
 augment(lm_fit, new_data = Carseats_train) %>%
@@ -187,8 +190,23 @@ Which is a bit lower. So it would appear, from this, that the polynomial regress
 
 -   Fit a polynomial regression to the `Carseats` data, predicting `Sales`.
 
+```{r}
+poly_seats_rec <- recipe(Sales ~ Price, data = Carseats_train) %>%
+  step_poly(Price, degree = 2)
+
+poly_seats_wf <- workflow() %>%
+  add_recipe(poly_seats_rec) %>%
+  add_model(lm_spec)
+
+poly_seats_fit <- fit(poly_seats_wf, data = Carseats_train)
+```
 
 -   Calculate the training and testing RMSE for the `Carseats` regression.
+
+```{r}
+augment(poly_seats_fit, new_data = Carseats_test) %>%
+  rmse(truth = Sales, estimate = .pred)
+```
 
 ## *k*-fold Cross-Validation
 
@@ -314,7 +332,54 @@ augment(final_fit, new_data = Auto_test) %>%
 
 -   Repeat all these steps on the `Carseats` data.
 
+```{r}
+# Starting with Building the tune() Recipe
+seats_tuned_rec <- recipe(Sales ~ Education, data = Carseats_train) %>%
+  step_poly(Education, degree = tune())
+
+# Seats Workflow
+seats_tuned_wf <- workflow() %>%
+  add_recipe(seats_tuned_rec) %>%
+  add_model(lm_spec)
+
+# K-Folds
+Seats_folds <- vfold_cv(Carseats_train, v = 10)
+
+# Grid
+seats_degree_grid <- grid_regular(degree(range = c(1, 10)), levels = 10)
+
+# Tuning the Grid
+seats_tune_res <- tune_grid(
+  object = seats_tuned_wf,
+  resamples = Seats_folds,
+  grid = seats_degree_grid
+)
+
+# Plotting to Find the Best Degree
+autoplot(seats_tune_res)
+```
+
+```{r}
+# Choosing the Best Degree (Every Possible Predictor has a Best Degree of 1)
+best_degree <- select_by_one_std_err(seats_tune_res, degree, metric = "rmse")
+best_degree
+```
+
+```{r}
+# Final Seats Workflow
+seats_final_wf <- finalize_workflow(poly_seats_wf, best_degree)
+
+# Final Seats Fit
+seats_final_fit <- fit(seats_final_wf, Carseats_train)
+
+# Accuracy
+augment(seats_final_fit, new_data = Carseats_test) %>%
+  rmse(truth=Sales, estimate=.pred)
+```
+
 -   Which `degree` value results in the best-fitting model for `Carseats`?
+
+In this case, and in every case, the best `degree` value to fit `Education` to `Sales` is 1.
 
 ## Bootstrap
 
@@ -351,6 +416,27 @@ boot_res %>%
 #### Activities
 
 -   Repeat this on the `Carseats` data.
+
+```{r}
+# Function Creation
+Seats_boots <- bootstraps(Carseats)
+
+seats_boot.fn <- function(split) {
+  lm_fit <- lm_spec %>% fit(Price ~ Education, data = analysis(split))
+  tidy(lm_fit)
+}
+
+# Applying the Function to Bootstraps
+seats_boot_res <- Seats_boots %>%
+  mutate(models = map(splits, seats_boot.fn))
+
+# Estimating Slope Variability and Intercept
+seats_boot_res %>%
+  unnest(cols = c(models)) %>%
+  group_by(term) %>%
+  summarise(mean = mean(estimate),
+            sd = sd(estimate))
+```
 
 ## Resources
 
