@@ -29,33 +29,111 @@ Make sure you load the `tidyverse` and `tidymodels`!
 
 Create a recipe for this dataset **identical** to the recipe you used in Homework 3.
 
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(discrim)
+library(poissonreg)
+library(corrr)
+library(klaR)
+tidymodels_prefer()
+
+titanic <- read_csv('data/titanic.csv')
+titanic$survived <- as.factor(titanic$survived) %>% relevel('Yes')
+titanic$pclass <- as.factor(titanic$pclass)
+```
+
 ### Question 1
 
-Split the data, stratifying on the outcome variable, `survived.`  You should choose the proportions to split the data into. Verify that the training and testing data sets have the appropriate number of observations. 
+Split the data, stratifying on the outcome variable, `survived.` You should choose the proportions to split the data into. Verify that the training and testing data sets have the appropriate number of observations.
+
+```{r}
+set.seed(12345)
+
+titanic_split <- initial_split(titanic, strata=survived)
+titanic_train <- training(titanic_split)
+titanic_test <- testing(titanic_split)
+
+titanic_rec <- recipe(titanic_train, survived ~ pclass + sex + age + sib_sp + parch + fare) %>%
+  step_impute_linear(age, impute_with=imp_vars(sib_sp)) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_interact(~ starts_with('sex'):fare + age:fare)
+```
 
 ### Question 2
 
 Fold the **training** data. Use *k*-fold cross-validation, with $k = 10$.
 
+```{r}
+titanic_folds <- vfold_cv(titanic_train, v = 10)
+titanic_folds
+```
+
 ### Question 3
 
 In your own words, explain what we are doing in Question 2. What is *k*-fold cross-validation? Why should we use it, rather than simply fitting and testing models on the entire training set? If we **did** use the entire training set, what resampling method would that be?
 
-### Question 4
+We use *k*-fold cross-validation in order to fit the data across the training set, except split into what is pretty much 10 smaller data sets. This can be used to tune certain parameters in order to find the best possible number to use. In this case, we seem to just be using to fit the model over 10 smaller training sets.
+
+Question 4
 
 Set up workflows for 3 models:
 
-1. A logistic regression with the `glm` engine;
-2. A linear discriminant analysis with the `MASS` engine;
-3. A quadratic discriminant analysis with the `MASS` engine.
+1.  A logistic regression with the `glm` engine;
+2.  A linear discriminant analysis with the `MASS` engine;
+3.  A quadratic discriminant analysis with the `MASS` engine.
 
 How many models, total, across all folds, will you be fitting to the data? To answer, think about how many folds there are, and how many models you'll fit to each fold.
+
+*30 total models, 3 models per 10 folds.*
+
+```{r}
+# Logistic Regression
+log_mod <- logistic_reg() %>%
+  set_engine('glm') %>%
+  set_mode('classification')
+
+log_wkflow <- workflow() %>%
+  add_model(log_mod) %>%
+  add_recipe(titanic_rec)
+
+# LDA Regression
+lda_mod <- discrim_linear() %>%
+  set_engine('MASS') %>%
+  set_mode('classification')
+
+lda_wkflow <- workflow() %>%
+  add_model(lda_mod) %>%
+  add_recipe(titanic_rec)
+
+# Quadratic Regression
+qda_mod <- discrim_quad() %>%
+  set_engine('MASS') %>%
+  set_mode('classification')
+
+qda_wkflow <- workflow() %>%
+  add_model(qda_mod) %>%
+  add_recipe(titanic_rec)
+```
 
 ### Question 5
 
 Fit each of the models created in Question 4 to the folded data.
 
-**IMPORTANT:** *Some models may take a while to run – anywhere from 3 to 10 minutes. You should NOT re-run these models each time you knit. Instead, run them once, using an R script, and store your results; look into the use of [loading and saving](https://www.r-bloggers.com/2017/04/load-save-and-rda-files/). You should still include the code to run them when you knit, but set `eval = FALSE` in the code chunks.*
+**IMPORTANT:** *Some models may take a while to run -- anywhere from 3 to 10 minutes. You should NOT re-run these models each time you knit. Instead, run them once, using an R script, and store your results; look into the use of [loading and saving](https://www.r-bloggers.com/2017/04/load-save-and-rda-files/). You should still include the code to run them when you knit, but set `eval = FALSE` in the code chunks.*
+
+```{r eval=FALSE}
+# Log Fit
+log_fit <- fit_resamples(log_wkflow, titanic_folds)
+
+# LDA Fit
+lda_fit <- fit_resamples(lda_wkflow, titanic_folds)
+
+# QDA Fit
+qda_fit <- fit_resamples(qda_wkflow, titanic_folds)
+
+save(log_fit, lda_fit, qda_fit, file='hw4fits.rmd')
+```
 
 ### Question 6
 
@@ -63,15 +141,61 @@ Use `collect_metrics()` to print the mean and standard errors of the performance
 
 Decide which of the 3 fitted models has performed the best. Explain why. *(Note: You should consider both the mean accuracy and its standard error.)*
 
+```{r}
+load('hw4fits.rmd')
+
+# Log Metrics per Fold
+collect_metrics(log_fit, summarize=FALSE)
+
+# Log Metrics Summarized
+collect_metrics(log_fit)
+
+# LDA Metrics per Fold
+collect_metrics(lda_fit, summarize=FALSE)
+
+# LDA Metrics Summarized
+collect_metrics(lda_fit)
+
+# QDA Metrics per Fold
+collect_metrics(qda_fit, summarize=FALSE)
+
+# QDA Metrics Summarized
+collect_metrics(qda_fit)
+```
+
 ### Question 7
 
-Now that you’ve chosen a model, fit your chosen model to the entire training dataset (not to the folds).
+Now that you've chosen a model, fit your chosen model to the entire training dataset (not to the folds).
+
+```{r}
+log_test <- fit(log_wkflow, titanic_test)
+lda_test <- fit(lda_wkflow, titanic_test)
+qda_test <- fit(qda_wkflow, titanic_test)
+```
 
 ### Question 8
 
-Finally, with your fitted model, use `predict()`, `bind_cols()`, and `accuracy()` to assess your model’s performance on the testing data!
+Finally, with your fitted model, use `predict()`, `bind_cols()`, and `accuracy()` to assess your model's performance on the testing data!
 
-Compare your model’s testing accuracy to its average accuracy across folds. Describe what you see.
+Compare your model's testing accuracy to its average accuracy across folds. Describe what you see.
+
+```{r}
+log_acc <- predict(log_test, new_data = titanic_test, type='class') %>%
+  bind_cols(titanic_test %>% select(survived)) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+lda_acc <- predict(lda_test, new_data = titanic_test, type='class') %>%
+  bind_cols(titanic_test %>% select(survived)) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+qda_acc <- predict(qda_test, new_data = titanic_test, type='class') %>%
+  bind_cols(titanic_test %>% select(survived)) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+
+results <- bind_rows(log_acc, lda_acc, qda_acc) %>%
+  tibble() %>% mutate(model = c('Log Model', 'LDA Model', 'QDA Model')) %>%
+  select(model, .estimate)
+
+results
+```
 
 ## Required for 231 Students
 

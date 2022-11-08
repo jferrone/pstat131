@@ -65,6 +65,13 @@ Hitters_fold <- vfold_cv(Hitters_train, v = 10)
 
 -   Note that no proportion was specified in `initial_split()`. Check the help information for this function. What is the default specification? Check the dimensions of the training and test sets to verify.
 
+    *The default specification is 3/4.*
+
+    ```{r}
+    dim(Hitters_train)[1]/dim(Hitters)[1]
+    dim(Hitters_test)[1]/dim(Hitters)[1]
+    ```
+
 ## Ridge Regression
 
 `parsnip` does not have a dedicated function to create a ridge regression model specification. You need to use **either** `linear_reg()` or `logistic_reg()` and set `mixture = 0` to specify a ridge model. The `mixture` argument specifies the amount of different types of regularization; `mixture = 0` specifies only ridge regularization and `mixture = 1` specifies only lasso regularization. Setting `mixture` to a value between 0 and 1 lets us use both. When using the `glmnet` engine, we also need to set a penalty to be able to fit the model. We will set this value to 0 for now; it is not necessarily the best value, but we will look at how to select the best value in a little bit.
@@ -111,6 +118,8 @@ tidy(ridge_fit, penalty = 50)
 
 -   Compare and contrast the estimates for these two very different penalty values. What do you notice?
 
+    *Higher* `penalty` *values seem to lead to much more extreme prediction estimates in this case and the values tend to move closer to zero as the* `penalty` *rises.*
+
 We can visualize how the magnitude of the coefficients are being regularized towards zero as the penalty goes up:
 
 ```{r}
@@ -134,6 +143,8 @@ predict(ridge_fit, new_data = Hitters_train, penalty = 500)
 #### Activities
 
 -   What do you notice about the predicted values for these observations as the value of `penalty` changes?
+
+    *As the* `penalty` *changes, the predicted values seem to rise and increase in size.*
 
 We saw how we can fit a ridge model and make predictions for different values of `penalty`, but it would be nice if we could find the "best" value of `penalty`. This is something we can use hyperparameter tuning for.
 
@@ -187,8 +198,25 @@ penalty_grid
 #### Activities
 
 -   What does `step_novel()` do? Why might it be useful?
+
+    `step_novel()` *assigns a previously unseen factor level to a new value*
+
 -   How does `penalty_grid` change if you set `levels = 100`? `levels = 10`?
+
+    ```{r}
+    grid_regular(penalty(range = c(-5, 5)), levels = 10)
+    grid_regular(penalty(range = c(-5, 5)), levels = 100)
+    ```
+
+    *The* `penalty_grid` *continues to move towards 0 as* `levels` *increases.*
+
 -   Investigate the other `grid` functions in `tidymodels`. Try one of them out here. What do you notice?
+
+    ```{r}
+    grid_random(penalty(range = c(-5, 5)))
+    ```
+
+    *This seems to much more sporadic and randomized, as it should.*
 
 Using 50 levels for one parameter might seem overkill, and in many applications it is. But remember that `glmnet` fits all the models in one go, so adding more levels to `penalty` doesn't affect the computational speed much for linear or logistic regression.
 
@@ -241,6 +269,8 @@ augment(ridge_final_fit, new_data = Hitters_test) %>%
 #### Activities
 
 -   Evaluate the performance of this model. Look at the parameter estimates for the training data. What does this tell you about the parameters?
+
+    *This* $R^2$ *value tells us that this is not the most accurate model, but in the case of sports predictions it is likely that this value would actually be quite suitable and represents an acceptable model for this situation.*
 
 ## Lasso Regression
 
@@ -309,7 +339,21 @@ augment(ridge_final_fit, new_data = Hitters_test) %>%
 
 -   Which model, ridge or lasso, performed best on the testing data?
 
+    *In this case, there seems to be very little disparity between the ridge and lasso models. Their* $R^2$ *values are nearly equivalent, and thus neither is particularly more effective than the other.*
+
 -   Instead of using `select_best()`, try selecting by one standard error, and refit to the training and testing sets. Does anything change?
+
+    ```{r}
+    best_penalty <- select_by_one_std_err(tune_res, metric = 'rsq', desc(penalty))
+
+    lasso_final <- finalize_workflow(lasso_workflow, best_penalty)
+    lasso_final_fit <- fit(lasso_final, data = Hitters_train)
+
+    augment(lasso_final_fit, new_data = Hitters_test) %>%
+      rsq(truth = Salary, estimate = .pred)
+    ```
+
+    *This shows a significant reduction in the estimate, and represents a worse model in the end.*
 
 ## Resources
 
