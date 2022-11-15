@@ -73,7 +73,7 @@ titanic_folds
 
 In your own words, explain what we are doing in Question 2. What is *k*-fold cross-validation? Why should we use it, rather than simply fitting and testing models on the entire training set? If we **did** use the entire training set, what resampling method would that be?
 
-We use *k*-fold cross-validation in order to fit the data across the training set, except split into what is pretty much 10 smaller data sets. This can be used to tune certain parameters in order to find the best possible number to use. In this case, we seem to just be using to fit the model over 10 smaller training sets.
+We use *k*-fold cross-validation in order to fit the data across the training set, except split into what is pretty much 10 smaller data sets. This can be used to tune certain parameters in order to find the best possible number to use. In this case, we seem to just be using to fit the model over 10 smaller training sets and determine the best model.
 
 Question 4
 
@@ -137,29 +137,20 @@ save(log_fit, lda_fit, qda_fit, file='hw4fits.rmd')
 
 ### Question 6
 
-Use `collect_metrics()` to print the mean and standard errors of the performance metric *accuracy* across all folds for each of the four models.
+Use `collect_metrics()` to print the mean and standard errors of the performance metric *accuracy* across all folds for each of the three models.
 
 Decide which of the 3 fitted models has performed the best. Explain why. *(Note: You should consider both the mean accuracy and its standard error.)*
 
 ```{r}
 load('hw4fits.rmd')
 
-# Log Metrics per Fold
-collect_metrics(log_fit, summarize=FALSE)
-
-# Log Metrics Summarized
+# Log Metrics
 collect_metrics(log_fit)
 
-# LDA Metrics per Fold
-collect_metrics(lda_fit, summarize=FALSE)
-
-# LDA Metrics Summarized
+# LDA Metrics
 collect_metrics(lda_fit)
 
-# QDA Metrics per Fold
-collect_metrics(qda_fit, summarize=FALSE)
-
-# QDA Metrics Summarized
+# QDA Metrics
 collect_metrics(qda_fit)
 ```
 
@@ -168,9 +159,7 @@ collect_metrics(qda_fit)
 Now that you've chosen a model, fit your chosen model to the entire training dataset (not to the folds).
 
 ```{r}
-log_test <- fit(log_wkflow, titanic_test)
-lda_test <- fit(lda_wkflow, titanic_test)
-qda_test <- fit(qda_wkflow, titanic_test)
+log_final_fit <- fit(log_wkflow, titanic_train)
 ```
 
 ### Question 8
@@ -180,22 +169,14 @@ Finally, with your fitted model, use `predict()`, `bind_cols()`, and `accuracy()
 Compare your model's testing accuracy to its average accuracy across folds. Describe what you see.
 
 ```{r}
-log_acc <- predict(log_test, new_data = titanic_test, type='class') %>%
-  bind_cols(titanic_test %>% select(survived)) %>%
-  accuracy(truth = survived, estimate = .pred_class)
-lda_acc <- predict(lda_test, new_data = titanic_test, type='class') %>%
-  bind_cols(titanic_test %>% select(survived)) %>%
-  accuracy(truth = survived, estimate = .pred_class)
-qda_acc <- predict(qda_test, new_data = titanic_test, type='class') %>%
-  bind_cols(titanic_test %>% select(survived)) %>%
+log_acc <- predict(log_final_fit, new_data = titanic_train, type='class') %>%
+  bind_cols(titanic_train %>% select(survived)) %>%
   accuracy(truth = survived, estimate = .pred_class)
 
-results <- bind_rows(log_acc, lda_acc, qda_acc) %>%
-  tibble() %>% mutate(model = c('Log Model', 'LDA Model', 'QDA Model')) %>%
-  select(model, .estimate)
-
-results
+log_acc
 ```
+
+Based on the chosen model, the logistic regression model had the best result and predicts the the correct factor for survival 81.26% of the time on the testing data.
 
 ## Required for 231 Students
 
