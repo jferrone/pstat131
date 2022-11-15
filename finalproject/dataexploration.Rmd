@@ -1,0 +1,282 @@
+---
+title: "Data Exploration"
+author: "John Ferrone"
+date: "2022-10-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(corrplot)
+library(janitor)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### Reading the Data
+
+```{r}
+rawdata <- read_csv('data/nycschooldata.csv')
+
+school_df <- rawdata %>%
+  clean_names %>%
+  select(4:41) %>%
+  na_if('N/A') %>%
+  mutate(
+    #community_school = ifelse(community_school == 'Yes', 1, 0),
+    economic_need_index = as.numeric(economic_need_index),
+    school_income_estimate = as.numeric(
+      gsub('[$,]', '', school_income_estimate)
+      ),
+    percent_ell = as.numeric(gsub('[%]', '', percent_ell)) / 100,
+    percent_asian = as.numeric(gsub('[%]', '', percent_asian)) / 100,
+    percent_black = as.numeric(gsub('[%]', '', percent_black)) / 100,
+    percent_hispanic = as.numeric(gsub('[%]', '', percent_hispanic)) / 100,
+    percent_blhi = as.numeric(gsub('[%]', '', percent_black_hispanic)) / 100,
+    percent_white = as.numeric(gsub('[%]', '', percent_white)) / 100,
+    attendance_rate = as.numeric(
+      gsub('[%]', '', student_attendance_rate)
+      ) / 100,
+    chronically_absent = as.numeric(
+      gsub('[%]', '', percent_of_students_chronically_absent)
+      ) / 100,
+    rigorous_instruction = as.numeric(
+      gsub('[%]', '', rigorous_instruction_percent)
+      ) / 100,
+    collab_teachers = as.numeric(
+      gsub('[%]', '', collaborative_teachers_percent)
+    ) / 100,
+    supportive_env = as.numeric(
+      gsub('[%]', '', supportive_environment_percent)
+    ) / 100,
+    leadership = as.numeric(
+      gsub('[%]', '', effective_school_leadership_percent)
+    ) / 100,
+    fam_com_ties = as.numeric(
+      gsub('[%]', '', strong_family_community_ties_percent)
+    ) / 100,
+    trust = as.numeric(gsub('[%]', '', trust_percent)) / 100,
+    ela_proficiency = as.numeric(average_ela_proficiency),
+    math_proficiency = as.numeric(average_math_proficiency),
+    avg_proficiency = (ela_proficiency + math_proficiency) / 2
+  ) %>%
+  select(
+    -sed_code, -percent_black_hispanic, -student_attendance_rate,
+    -percent_of_students_chronically_absent, -collaborative_teachers_percent,
+    -rigorous_instruction_percent, -supportive_environment_percent,
+    -effective_school_leadership_percent, -strong_family_community_ties_percent,
+    -trust_percent, -average_ela_proficiency, -average_math_proficiency, 
+    -grades, -grade_low, -grade_high, -ends_with('rating')
+  )
+
+loc_df <- school_df %>% 
+  select(school_name, location_code, district, latitude, 
+         longitude, address_full, city, zip)
+
+cor(select_if(school_df, is.numeric), use="pairwise.complete.obs") %>%
+  corrplot(method = 'shade', type = 'lower', diag = FALSE)
+
+eda_p1 <- ggplot(school_df, 
+                 aes(x = ela_proficiency, y = math_proficiency,
+                     color = school_income_estimate)) +
+  geom_point()
+
+ggplot(school_df, aes(x = school_income_estimate)) + 
+  geom_histogram(bins=35)
+```
+
+```{r}
+school_df
+ggplot(school_df, aes(community_school, avg_proficiency)) + 
+  geom_boxplot()
+# MAJOR INDICATOR
+```
+
+```{r}
+ggplot(school_df, 
+       aes(x = avg_proficiency, y = economic_need_index, 
+       color = school_income_estimate)
+       ) +
+  geom_point() + scale_y_continuous()
+```
+
+```{r}
+count(school_df, city) # ASSUMING MANHATTAN = NEW YORK
+
+ggplot(filter(school_df, city==c('NEW YORK', 'BRONX')), aes(avg_proficiency, latitude)) + geom_point()
+ggplot(filter(school_df, city==c('NEW YORK', 'BRONX')), aes(avg_proficiency, longitude)) + geom_point()
+```
+
+While it may seem unnecessary, this was graph was created to determine if there was any correlation between a school's location.
+
+```{r}
+ggplot(school_df, aes(x=percent_ell, y=avg_proficiency)) + 
+  geom_point() + scale_x_sqrt()
+```
+
+```{r}
+ggplot(school_df, aes(x = percent_white, y = avg_proficiency)) + 
+  geom_point() + scale_x_sqrt()
+```
+
+```{r}
+ggplot(filter(school_df, attendance_rate > 0.7), aes(x = attendance_rate, y = avg_proficiency)) +
+  geom_point()
+# OUTLIERS REMOVED TO FOCUS ON THIS DISTRIBUTION
+```
+
+```{r}
+ggplot(filter(school_df, rigorous_instruction > 0), 
+       aes(x = rigorous_instruction, y = avg_proficiency)) + 
+  geom_point()
+# FILTERING OUT OUTLIERS AT 0
+```
+
+```{r}
+ggplot(filter(school_df, fam_com_ties > 0), 
+       aes(x = fam_com_ties, y = avg_proficiency)) + 
+  geom_point()
+```
+
+```{r}
+ggplot(filter(school_df, collab_teachers > 0),
+              aes(x = collab_teachers, y = avg_proficiency)) + 
+  geom_point()
+```
+
+```{r}
+ggplot(school_df, aes(x = chronically_absent, y = avg_proficiency)) + 
+  geom_point()
+```
+
+```{r}
+ggplot(filter(school_df, leadership > 0), aes(x = leadership, y = avg_proficiency)) + geom_point()
+```
+
+```{r}
+ggplot(filter(school_df, trust>0), aes(x = trust, y = avg_proficiency)) + 
+  geom_point()
+```
+
+```{r}
+ggplot(filter(school_df, supportive_env > 0), 
+       aes(x = supportive_env, y = avg_proficiency)) +
+  geom_point()
+```
+
+```{r}
+ggplot(filter(school_df, leadership > 0), 
+       aes(x = leadership, y = avg_proficiency)) + 
+  geom_point()
+```
+
+```{r}
+school_final <- school_df %>%
+  select(-school_name, -location_code, -district, -latitude, -longitude, 
+         -address_full, -city, -zip) %>%
+  filter(is.na(avg_proficiency) == FALSE)
+
+colMeans(is.na(school_final))
+```
+
+
+##Linear Regression
+
+Splitting into Training and Testing Sets
+```{r}
+school_split <- initial_split(school_final, prop=0.8, strata=avg_proficiency)
+
+school_train <- training(school_split)
+school_test <- testing(school_split)
+```
+
+Creating Recipe #1 (Community School as a Dummy Variable)
+```{r}
+set.seed(101010)
+school_recipe <- recipe(avg_proficiency ~ ., data=school_train) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_rm(c('math_proficiency', 'ela_proficiency', 'percent_asian', 
+            'percent_black', 'percent_hispanic', 'percent_white')) %>%
+  step_impute_linear(school_income_estimate, 
+                     impute_with=imp_vars(
+                       economic_need_index, starts_with('community')
+                       )) %>%
+  step_interact(~ starts_with('community'):school_income_estimate +
+                  attendance_rate:chronically_absent) %>%
+  step_center(all_numeric_predictors()) %>%
+  step_scale(all_numeric_predictors())
+
+
+lm_model <- linear_reg() %>%
+  set_engine('lm')
+
+lm_wkflow <- workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(school_recipe)
+
+lm_fit <- fit(lm_wkflow, school_train)
+
+school_recipe
+```
+
+Metrics
+```{r}
+school_train_res <- predict(lm_fit, new_data = school_train %>% 
+                              select(-avg_proficiency))
+school_test_res <- predict(lm_fit, new_data = school_test %>%
+                             select(-avg_proficiency))
+```
+
+
+```{r}
+school_train_res <- bind_cols(school_train_res, school_train %>% 
+                                select(avg_proficiency))
+
+school_train_res %>% ggplot(aes(x=.pred, y=avg_proficiency)) +
+  geom_point(alpha = 0.2) +
+  geom_abline(lty = 2) +
+  theme_minimal() + coord_obs_pred()
+
+school_test_res <- bind_cols(school_test_res, school_test %>%
+                               select(avg_proficiency))
+
+school_test_res %>% ggplot(aes(x=.pred, y=avg_proficiency)) +
+  geom_point(alpha = 0.2) +
+  geom_abline(lty = 2) +
+  theme_minimal() + coord_obs_pred()
+```
+
+## Metrics
+```{r}
+school_metrics <- metric_set(rmse, rsq, mae)
+school_test_metrics <- metric_set(rmse, rsq, mae)
+```
+
+## Testing Metrics
+```{r}
+bind_rows(
+  school_test_metrics(school_train_res, truth=avg_proficiency, estimate=.pred),
+  school_metrics(school_test_res, truth=avg_proficiency, estimate=.pred)
+)
+```
+
+```{r}
+school_final
+```
+
+```{r}
+filter(school_df, attendance_rate > 0) %>%
+  ggplot(aes(x = attendance_rate, y = avg_proficiency, 
+             color = chronically_absent)) + 
+  geom_point()
+```
+
+```{r}
+school_train %>%
+  ggplot(
+    aes(x = school_income_estimate, y = avg_proficiency, 
+        shape = community_school)
+    ) + geom_point(alpha=0.4)
+```
+
