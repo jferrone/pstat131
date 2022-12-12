@@ -1,0 +1,237 @@
+---
+title: "Tree Model Testing"
+author: "John Ferrone"
+date: "2022-11-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Initializing the Data Set
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(janitor)
+library(corrplot)
+library(rpart.plot)
+library(randomForest)
+library(ranger)
+library(vip)
+tidymodels_prefer()
+
+rawdata <- read_csv('data/nycschooldata.csv')
+
+school_df <- rawdata %>%
+  clean_names() %>%
+  select(4:41) %>%
+  na_if('N/A') %>%
+  mutate(
+    #community_school = ifelse(community_school == 'Yes', 1, 0),
+    economic_need_index = as.numeric(economic_need_index),
+    school_income_estimate = as.numeric(
+      gsub('[$,]', '', school_income_estimate)
+      ),
+    percent_ell = as.numeric(gsub('[%]', '', percent_ell)) / 100,
+    percent_asian = as.numeric(gsub('[%]', '', percent_asian)) / 100,
+    percent_black = as.numeric(gsub('[%]', '', percent_black)) / 100,
+    percent_hispanic = as.numeric(gsub('[%]', '', percent_hispanic)) / 100,
+    percent_blhi = as.numeric(gsub('[%]', '', percent_black_hispanic)) / 100,
+    percent_white = as.numeric(gsub('[%]', '', percent_white)) / 100,
+    attendance_rate = as.numeric(
+      gsub('[%]', '', student_attendance_rate)
+      ) / 100,
+    chronically_absent = as.numeric(
+      gsub('[%]', '', percent_of_students_chronically_absent)
+      ) / 100,
+    rigorous_instruction = as.numeric(
+      gsub('[%]', '', rigorous_instruction_percent)
+      ) / 100,
+    collab_teachers = as.numeric(
+      gsub('[%]', '', collaborative_teachers_percent)
+    ) / 100,
+    supportive_env = as.numeric(
+      gsub('[%]', '', supportive_environment_percent)
+    ) / 100,
+    leadership = as.numeric(
+      gsub('[%]', '', effective_school_leadership_percent)
+    ) / 100,
+    fam_com_ties = as.numeric(
+      gsub('[%]', '', strong_family_community_ties_percent)
+    ) / 100,
+    trust = as.numeric(gsub('[%]', '', trust_percent)) / 100,
+    ela_proficiency = as.numeric(average_ela_proficiency),
+    math_proficiency = as.numeric(average_math_proficiency),
+    avg_proficiency = (ela_proficiency + math_proficiency) / 2
+  ) %>%
+  select(
+    -sed_code, -percent_black_hispanic, -student_attendance_rate,
+    -percent_of_students_chronically_absent, -collaborative_teachers_percent,
+    -rigorous_instruction_percent, -supportive_environment_percent,
+    -effective_school_leadership_percent, -strong_family_community_ties_percent,
+    -trust_percent, -average_ela_proficiency, -average_math_proficiency, 
+    -grades, -grade_low, -grade_high, -ends_with('rating')
+  )
+
+school_final <- school_df %>%
+  select(-school_name, -location_code, -district, -latitude, -longitude, 
+         -address_full, -city, -zip) %>%
+  filter(is.na(avg_proficiency) == FALSE)
+```
+
+## Splitting the Data
+```{r}
+set.seed(101010)
+
+school_split <- initial_split(school_final, prop=0.8, strata=avg_proficiency)
+school_train <- training(school_split)
+school_test <- testing(school_split)
+
+school_folds <- vfold_cv(school_train, strata=avg_proficiency)
+
+school_metrics <- metric_set(rmse, rsq, mae)
+```
+
+## Creating the Recipe
+```{r}
+school_recipe <- recipe(avg_proficiency ~ ., data=school_train) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_rm(c('math_proficiency', 'ela_proficiency', 'percent_asian', 
+            'percent_black', 'percent_hispanic', 'percent_white')) %>%
+  step_impute_linear(school_income_estimate, 
+                     impute_with=imp_vars(
+                       economic_need_index, starts_with('community')
+                       )) %>%
+  step_interact(~ starts_with('community'):school_income_estimate +
+                  attendance_rate:chronically_absent) %>%
+  step_normalize(all_numeric_predictors())
+```
+
+## Decision Tree Workflow/Fit
+```{r}
+decision_spec <- decision_tree(cost_complexity=tune()) %>%
+  set_mode('regression') %>%
+  set_engine('rpart')
+
+decision_wf <- workflow() %>%
+  add_model(decision_spec) %>%
+  add_recipe(school_recipe)
+
+cost_grid <- grid_regular(cost_complexity(range=c(-5,5)), levels=10)
+
+decision_tune <- tune_grid(
+  decision_wf,
+  resamples=school_folds,
+  grid=cost_grid
+)
+
+autoplot(decision_tune)
+```
+
+## Selecting the Best Value for Complexity and Fitting the Model
+```{r}
+best_complexity = select_best(decision_tune, metric='rmse')
+
+decision_tree_final <- finalize_workflow(decision_wf, best_complexity)
+
+decision_tree_final_fit <- fit(decision_tree_final, data=school_train)
+```
+
+## Testing Performance
+```{r}
+augment(decision_tree_final_fit, new_data=school_test) %>%
+  school_metrics(truth=avg_proficiency, estimate=.pred)
+```
+## Scatterplot
+```{r}
+augment(decision_tree_final_fit, new_data=school_test) %>%
+  ggplot(aes(avg_proficiency, .pred)) +
+  geom_abline() +
+  geom_point(alpha=0.5)
+```
+
+## Random Forest Tree
+```{r}
+rf_spec <- rand_forest(trees=tune(), min_n=tune(), mtry=tune()) %>%
+  set_engine('randomForest', importance=TRUE) %>%
+  set_mode('regression')
+
+rf_workflow <- workflow() %>%
+  add_model(rf_spec) %>%
+  add_recipe(school_recipe)
+
+rf_grid <- grid_regular(
+  mtry(range=c(1, 19)), trees(range=c(10, 2000)), min_n(range=c(30, 200)),
+  levels=10
+)
+
+rf_tune_grid <- tune_grid(
+  rf_workflow,
+  resamples=school_folds,
+  rf_grid
+)
+```
+
+```{r}
+rf_tune_grid %>%
+  autoplot()
+```
+
+```{r}
+rf_tune_best <- select_best(rf_tune_grid)
+
+rf_final <- finalize_workflow(rf_workflow, rf_tune_best)
+
+rf_final_fit <- fit(rf_final, school_train)
+
+rf_final_fit %>% 
+  extract_fit_parsnip() %>%
+  vip()
+```
+
+## Testing Performance
+```{r}
+augment(rf_final_fit, new_data=school_test) %>%
+  school_metrics(truth=avg_proficiency, estimate=.pred)
+```
+
+## Boosted Tree
+```{r}
+boosted_spec <- boost_tree(trees=tune()) %>%
+  set_engine('xgboost') %>%
+  set_mode('regression')
+
+boosted_wf <- workflow() %>%
+  add_model(boosted_spec) %>%
+  add_recipe(school_recipe)
+
+trees_grid <- grid_regular(trees(range=c(10,2000)), levels=10)
+
+boost_tune <- tune_grid(
+  boosted_wf,
+  resamples=school_folds,
+  grid=trees_grid
+)
+```
+
+## Autoplot
+```{r}
+autoplot(boost_tune)
+```
+
+```{r}
+boost_best <- select_best(boost_tune)
+
+boost_final <- finalize_workflow(boosted_wf, rf_tune_best)
+
+boost_final_fit <- fit(boost_final, school_train)
+```
+
+
+```{r}
+augment(boost_final_fit, new_data=school_test) %>%
+  school_metrics(truth=avg_proficiency, estimate=.pred)
+```
+

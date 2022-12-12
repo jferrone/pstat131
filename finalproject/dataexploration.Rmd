@@ -10,6 +10,10 @@ library(tidyverse)
 library(tidymodels)
 library(corrplot)
 library(janitor)
+library(maps)
+library(plotly)
+library(httr)
+library(broom)
 
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -87,10 +91,38 @@ ggplot(school_df, aes(x = school_income_estimate)) +
 ```
 
 ```{r}
+unique(school_df$city)
+```
+
+```{r}
+r <- GET('http://data.beta.nyc//dataset/0ff93d2d-90ba-457c-9f7e-39e47bf2ac5f/resource/35dd04fb-81b3-479b-a074-a27a37888ce7/download/d085e2f8d0b54d4590b1e7d1f35594c1pediacitiesnycneighborhoods.geojson')
+
+nycmap <- rgdal::readOGR(content(r, 'text'), 'OGRGeoJSON', verbose=F)
+```
+
+```{r}
+nycmaps_df <- tidy(nycmap)
+ggplot() +
+  geom_polygon(data=nycmaps_df, aes(x=long, y=lat, group=group),
+               color='white', fill='lightgrey') +
+  geom_point(data=school_df, 
+             mapping=aes(x = longitude, y = latitude, color=city)) +
+  labs(title='Schools in the New York City Area by City') +
+  theme(panel.background = element_blank(), legend.position = 'none',
+        axis.title.x = element_blank(), axis.title.y = element_blank(), 
+        axis.text.x = element_blank(), axis.text.y = element_blank(),
+        axis.ticks.x = element_blank(), axis.ticks.y = element_blank())
+```
+
+
+
+```{r}
 school_df
 ggplot(school_df, aes(community_school, avg_proficiency)) + 
   geom_boxplot()
 # MAJOR INDICATOR
+
+unique(school_df$city)
 ```
 
 ```{r}
@@ -185,15 +217,15 @@ colMeans(is.na(school_final))
 
 Splitting into Training and Testing Sets
 ```{r}
-school_split <- initial_split(school_final, prop=0.8, strata=avg_proficiency)
+set.seed(101010)
 
+school_split <- initial_split(school_final, prop=0.8, strata=avg_proficiency)
 school_train <- training(school_split)
 school_test <- testing(school_split)
 ```
 
 Creating Recipe #1 (Community School as a Dummy Variable)
 ```{r}
-set.seed(101010)
 school_recipe <- recipe(avg_proficiency ~ ., data=school_train) %>%
   step_dummy(all_nominal_predictors()) %>%
   step_rm(c('math_proficiency', 'ela_proficiency', 'percent_asian', 
@@ -255,10 +287,11 @@ school_test_metrics <- metric_set(rmse, rsq, mae)
 
 ## Testing Metrics
 ```{r}
-bind_rows(
+model_1_metrics <- bind_rows(
   school_test_metrics(school_train_res, truth=avg_proficiency, estimate=.pred),
   school_metrics(school_test_res, truth=avg_proficiency, estimate=.pred)
 )
+model_1_metrics
 ```
 
 ```{r}
@@ -283,13 +316,11 @@ school_train %>%
 ### Ridge/Lasso Modelling
 Splitting the Data and Creating Folds
 ```{r}
-set.seed(12345)
-
 school_split <- initial_split(school_final, strata = avg_proficiency)
 school_train <- training(school_split)
 school_test <- testing(school_split)
 
-school_folds <- vfold_cv(school_train, v = 10)
+school_folds <- vfold_cv(school_train, strata=avg_proficiency)
 ```
 
 Recipe Creation (Same as Above, but using `step_normalize`)
@@ -348,17 +379,21 @@ school_final_fit <- finalize_workflow(school_wkflow, best_model) %>%
 
 train_results <- augment(school_final_fit, new_data = school_train)
 train_results %>%
-  rsq(avg_proficiency, estimate=.pred)
+  school_metrics(avg_proficiency, estimate=.pred)
 ```
 
 Fitting the Model to the Testing Set
 ```{r}
 test_results <- augment(school_final_fit, new_data = school_test)
 test_results %>%
-  rsq(avg_proficiency, estimate=.pred)
+  school_metrics(avg_proficiency, estimate=.pred)
 ```
 
 This model has a better $R^2$ value than the prior, and thus will now be used further.
+
+```{r}
+model_1_metrics
+```
 
 Predicting the Values so they can be Plotted
 ```{r}
@@ -367,7 +402,6 @@ school_train_res <- predict(school_final_fit, new_data = school_train %>%
 school_test_res <- predict(school_final_fit, new_data = school_test %>%
                              select(-avg_proficiency))
 ```
-
 
 ```{r}
 train_plot_results <- bind_cols(school_train_res, school_train %>% 

@@ -1,0 +1,837 @@
+---
+title: "Final Project"
+author: "John Ferrone"
+date: "2022-12-11"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+This project aims to predict the average proficiency of students in New York state schools. The data is taken from PASS NYC's Kaggle competition, linked [here](https://www.kaggle.com/code/manjeetsingh/pass-nyc-recommendations).
+
+```{r}
+# Code for this at end of document.
+readRDS('plots/nycplot.rds')
+```
+
+## Average Proficiency
+
+The New York City Department of Education oversees a yearly survey, submitted by the parents, staff, and students of schools. The majority of the data comes from that survey, but the goal is to predict a separate value, the average proficiency. The average proficiency is the calculated combination of two separate measurements of proficiency, English Language Arts (ELA) and math. Adopted in 2010, it is thought that these scores will be able reflect how the students of any given school are progressing towards readiness for whatever their path may be after high school. This data is reported on a yearly basis, and in this particular case the data comes from 2016.
+
+## What is the Purpose of this Model ?
+
+The purpose of this model is to see if it possible to predict how a given school will perform on both assessments using survey data which is taken in each of these schools by the New York City Department of Education. This could then be used to analyzed which variables in specific tend to lead towards a successful score, and what can be prioritized to improve the scores of each school, but this report will focus on the prediction portion of this.
+
+## Project Roadmap
+
+1.  Exploratory Data Analysis
+    -   This will be performed in such a way that relationships between variables can be discovered and the steps needed to create the model can be planned out.
+2.  Data Segmentation
+    -   The data will then be split into a training and testing set, and the training set further into ten folds. This allows cross-fold validation to be used in order to fit the model over ten smaller subsets of the data, each of which would be new and allow the model to learn from a previously unseen portion of the training set.
+3.  Recipe Creation
+    -   Following this, and using the information gathered during exploratory analysis, the recipe for the models will then be built. This will be done after looking for any existing correlation between the predictors and determining which predictors may not be useful any further in the model.
+4.  Modelling the Data
+    -   For each model there will be two main steps. First, the model will be constructed on the folded data. Then, this model will be fitted to both the training and testing to evaluate the overall fit of the model.
+5.  Selection
+    -   Finally, the best model will be chosen and analyzed further to see which predictors played the largest role in predicting the outcome variable.
+
+# Exploratory Data Analysis
+
+Before taking any further steps, the libraries needed for the rest of the project will be loaded in and the seed will be set to ensure reproducibility.
+
+```{r message=FALSE}
+library(tidyverse) # Used for tidying the data
+library(corrplot) # Used for creating correlation grids
+library(janitor) # Used to convert the variable names to snake-case
+library(httr) # Used to grab the JSON file which created the map of NYC
+library(broom) # Used to tidy the data used for the map of NYC
+library(tidymodels) # Used to create the models
+library(plotly) # Used to add a tooltip to the NYC map
+library(ggpubr) # Used to create custom color palettes
+library(wesanderson) # Graph color palettes
+library(knitr) # Used to create custom tables
+library(kableExtra) # Used to create custom tables
+library(Polychrome) # Custom color palettes
+library(vip) # Variable importance plots
+
+set.seed(543672)
+```
+
+Prior to modelling the data, we must first load the required packages and the data itself. After looking at the data it can be determined what variables will be most useful for modelling. Some of these may need to be converted into numeric format, while the inclusion of locale data may not be entirely useful in the final model. This section will focus on the manipulation of tidying of the data before we move onto visualizing the existing relationships within the data.
+
+## Loading the Raw Data
+
+The data which was downloaded from Kaggle is contained within a csv file. This will be loaded first.
+
+```{r}
+# Reading the data from a csv file
+rawdata <- read_csv('data/nycschooldata.csv', show_col_types=FALSE) 
+
+# Printing the first six rows
+rawdata %>% 
+  head()  %>%
+  kable() %>%
+  kable_styling("striped", full_width = F) %>% 
+  scroll_box(width='825px', height='400px')
+```
+
+## Data Reference
+
+This section will be used to state what the final data represents. Although the data set is currently much larger, these are the final values which will be used for modelling. These are being presented here to give context for the plots shown below in the exploratory data analysis sections.
+
+-   `community_shool` is a factor variable which states whether a school is part of the community school system. These schools provide extracurricular classes after school hours and over the summer as well as health services. For more information: [NYC Community Schools](https://www.schools.nyc.gov/learning/programs/community-schools).
+
+-   `economic_need_index` is a numeric variable which is based on what percentage of families in the schools' census tract is below the poverty line. For more information: [Student Economic Need Index](https://data.cccnewyork.org/data/bar/1371/student-economic-need-index#1371/a/1/1622/127)
+
+-   `school_income_estimate` is a numeric variable which is is not clearly defined. After research, I could not determine if it was based on the household average of students, or what the school receives. Based on the specific naming, I would assume it is household income but it will not be referenced in any specific capacity due to the lack of a clear meaning.
+
+-   `percent_ell` is a numeric variable which represents the percentage of students who are learning English, or are English Language Learners (ELL).
+
+-   `percent_blhi` is a numeric variable which represents the percentage of students who are black or hispanic.
+
+-   `attendance_rate` is a numeric variable which represents the attendance rate a school
+
+-   `chronically_absent` is a numeric variable which represents the percentage of students who are chronically absent at a school, or missed at least 18 days of school. For more information: [Chalkbeat on Chronically Absent NYC Students](https://ny.chalkbeat.org/2022/9/16/23357144/chronic-absenteeism-pandemic-nyc-school)
+
+-   `rigorous_instruction` is a numeric variable which represents the rating of how much a school emphasizes academic success. For more information: [NYC DOE: Citywide Results](https://secure.panoramaed.com/nycdoe/understand/9050281/summary#topic-scores-all-respondents)
+
+-   `collab_teachers` is a numeric variable which represents the rating of the cultural awareness and inclusiveness of teachers in a given school. For more information: [NYC DOE Citywide Results](https://secure.panoramaed.com/nycdoe/understand/9050281/summary#topic-scores-all-respondents)
+
+-   `supportive_env` is a numeric variable which represents the rating of how safe the school environment is, if the classroom setting is built around minimizing disruptions, and working to improve the individual capacity of students. For more information: [NYC DOE Citywide Results](https://secure.panoramaed.com/nycdoe/understand/9050281/summary#topic-scores-all-respondents)
+
+-   `leadership` is a numeric variable which represents the rating of how well leadership works to improve the learning environment. For more information: [NYC DOE Citywide Results](https://secure.panoramaed.com/nycdoe/understand/9050281/summary#topic-scores-all-respondents)
+
+-   `fam_com_ties` is a numeric variable which represents how well the school works to communicate with he families and communities of students. For more information: [NYC DOE Citywide Results](https://secure.panoramaed.com/nycdoe/understand/9050281/summary#topic-scores-all-respondents)
+
+-   `trust` is a numeric variable which represents the level of trust amongst students, and between students and teachers. For more information: [NYC DOE Citywide Results](https://secure.panoramaed.com/nycdoe/understand/9050281/summary)
+
+    *Note, at the time of submitting this report, I was no longer able to easily access the NYC DOE Citywide Results site without a login. It is my hope that the reader can still access these results if needed.*
+
+## Cleaning and Tidying the Data
+
+This data contains 161 columns, or individual variables, many of which will not be useful, as can clearly be seen by the first three columns which are empty. Thus there is plenty of tidying that will need to be done. First, the names of the variables will be cleaned and the appropriate columns will be selected.
+
+```{r}
+school_clean <- rawdata %>%
+  clean_names() %>% # Cleaning the column names
+  select(4:41) # Subsetting the columns to exclude the empty first three, 
+               # and the last 120 which are not relevant to this model
+```
+
+Next, after analyzing these rows it was discovered that many N/A values were depicted as a string. In order to be compatible with later steps, these will be converted to R's method of storing empty values. Following this, we will convert the percentage columns to numeric decimal values. After this, we will drop a number of columns which either have been modified and renamed, or will not be used for the analysis. The data points related to locale will be maintained until exploratory analysis is completed.
+
+```{r warning=FALSE}
+school_df <- school_clean %>% 
+  mutate( # Mutating a number of columns to numeric and setting community_school as a factor
+    community_school = factor(community_school, levels=c('Yes', 'No')),
+    economic_need_index = as.numeric(economic_need_index),
+    school_income_estimate = as.numeric(
+      gsub('[$,]', '', school_income_estimate)
+      ),
+    percent_ell = as.numeric(gsub('[%]', '', percent_ell)) / 100,
+    percent_asian = as.numeric(gsub('[%]', '', percent_asian)) / 100,
+    percent_black = as.numeric(gsub('[%]', '', percent_black)) / 100,
+    percent_hispanic = as.numeric(gsub('[%]', '', percent_hispanic)) / 100,
+    percent_blhi = as.numeric(gsub('[%]', '', percent_black_hispanic)) / 100,
+    percent_white = as.numeric(gsub('[%]', '', percent_white)) / 100,
+    attendance_rate = as.numeric(
+      gsub('[%]', '', student_attendance_rate)
+    ) / 100,
+    chronically_absent = as.numeric(
+      gsub('[%]', '', percent_of_students_chronically_absent)
+    ) / 100,
+    rigorous_instruction = as.numeric(
+      gsub('[%]', '', rigorous_instruction_percent)
+    ) / 100,
+    collab_teachers = as.numeric(
+      gsub('[%]', '', collaborative_teachers_percent)
+    ) / 100,
+    supportive_env = as.numeric(
+      gsub('[%]', '', supportive_environment_percent)
+    ) / 100,
+    leadership = as.numeric(
+      gsub('[%]', '', effective_school_leadership_percent)
+    ) / 100,
+    fam_com_ties = as.numeric(
+      gsub('[%]', '', strong_family_community_ties_percent)
+    ) / 100,
+    trust = as.numeric(gsub('[%]', '', trust_percent)) / 100,
+    ela_proficiency = as.numeric(average_ela_proficiency),
+    math_proficiency = as.numeric(average_math_proficiency),
+    avg_proficiency = (ela_proficiency + math_proficiency) / 2
+  ) %>%
+  select(
+    -sed_code, -percent_black_hispanic, -student_attendance_rate,
+    -percent_of_students_chronically_absent, -collaborative_teachers_percent,
+    -rigorous_instruction_percent, -supportive_environment_percent,
+    -effective_school_leadership_percent, -strong_family_community_ties_percent,
+    -trust_percent, -average_ela_proficiency, -average_math_proficiency, 
+    -grades, -grade_low, -grade_high, -ends_with('rating')
+  ) # Selecting the variables which will be explored further
+
+school_df %>%
+  head() %>%
+  kable() %>%
+  kable_styling("striped", full_width = F) %>% 
+  scroll_box(width='825px', height='300px')
+  
+```
+
+Before exploring the data further, it will be useful to know which variables may hold N/A values.
+
+```{r}
+colMeans(is.na(school_df)) # Proportion of NA values
+```
+
+The highest amount of N/A values is 31.13% for `school_icnome_estimate` followed by 4.324% for each measurement of proficiency. Removing the columns which have empty values will work for the most part, but when it comes to `school_income_estimate` it will be better to impute the values using related columns due to nearly a third of the data being missing.
+
+## Exploring Tidied Data
+
+Now that the data has been cleaned and a majority of the less useful columns have been cut out, exploration can begin into the existing relationships between the remaining predictors. First, a correlation matrix will be created to determine if there are any overt relationships.
+
+```{r fig.width=8, fig.height=6}
+cor_pal <- colorRampPalette(wes_palette("Zissou1", 100, type = "continuous"))
+# Custom color palette for correlation scales
+
+cor_df <- school_df %>%
+  select_if(is.numeric) %>% # Selecting numeric variables
+  select(-district, -zip, -math_proficiency, -ela_proficiency) 
+# Removing location data and values correlated with avg. prof.
+
+cor(cor_df, use="pairwise.complete.obs") %>% # Correlation plot
+  corrplot(type = 'lower', diag = FALSE, col=rev(cor_pal(100)), tl.col='black')
+```
+
+From the correlation matrix, a number of relationships are notably worth exploring further. The outcome variable, `avg_proficiency` seems to be very strongly correlated to the racial makeup of a school and it's economic status. There are some other correlations which may have been obvious from the beginning, such as between `economic_need_index` and `school_income_estimate`. This matrix also shows that there may not be significant relationship between `avg_proficiency` and the school's location, represented by `longitude` and `latitude`. Before analyzing the relationship between `avg_proficiency` and other variables, we will first look at its own distribution.
+
+```{r warning=FALSE, fig.width=8, fig.height=6}
+ggplot(school_df, mapping=aes(x=avg_proficiency)) +
+  geom_histogram(color='white', fill=wes_palette('Zissou1')[1], bins=30) +
+  labs(x = 'Average Proficiency', y = 'Count', title='Distribution of Average Proficiency') +
+  theme_classic() + scale_y_continuous(expand = c(0,0)) # Moves bottoms of bar to x-axis
+```
+
+```{r fig.width=8, fig.height=6}
+ggplot(drop_na(school_df), aes(x = avg_proficiency, y = economic_need_index,
+                      color = school_income_estimate)) +
+  geom_point() + scale_y_continuous() + theme_classic() +
+  labs(x = 'Average Proficiency', y = 'Economic Need Index',
+       color = 'School Income Estimate') + theme(legend.position='top') + 
+  scale_color_gradientn(colors=wes_palette("Zissou1", 100, type = "continuous")) +
+  guides(colour=guide_colourbar(barwidth=30, title.position='top', # Puts scale on the top
+                                label.position='bottom')) # Stretches and alters labels
+```
+
+```{r warning=FALSE, fig.width=8, fig.height=4}
+custom_wes = c(wes_palette('Zissou1')[1], wes_palette('Zissou1')[5])
+
+school_df['blhi_dominant'] <- ifelse(school_df$percent_blhi > 0.5, T, F)
+
+ggplot(school_df, mapping=aes(x=avg_proficiency, fill=blhi_dominant,
+                              color=blhi_dominant)) +
+  geom_density(alpha=0.4) + theme_classic() +
+  theme(legend.position=c(0.98, 0.9), legend.justification='right') + 
+  labs(x = 'Average Proficiency', y = 'Density',
+       title = 'Average Proficiency Distribution by Race') +
+  scale_fill_manual(name=NULL, labels=c('Asian/White', 'Black/Hispanic'),
+                      values=custom_wes) + # Changing the legend labels
+  scale_color_manual(name=NULL, labels=c('Asian/White', 'Black/Hispanic'), 
+                      values=custom_wes) + # Same as above
+  scale_y_continuous(expand = c(0,0)) + scale_x_continuous(expand=c(0,0)) # Moves plot to axes
+```
+
+```{r warning=FALSE, fig.width=8, fig.height=4}
+ggplot(school_df, mapping=aes(x=avg_proficiency, fill=community_school, 
+                              color=community_school)) +
+  geom_density(alpha=0.4) + theme_classic() +
+  theme(legend.position=c(0.98, 0.9), legend.justification='right') + 
+  labs(x = 'Average Proficiency', y = 'Density',
+       title='Average Proficiency Distribution by School Type') +
+  scale_fill_manual(name='Community School?', values=custom_wes) + 
+  scale_color_manual(name='Community School?', values=custom_wes) + # Legend title
+  scale_y_continuous(expand = c(0,0)) + scale_x_continuous(expand=c(0,0)) # Moves plot to axes
+```
+
+```{r warning=FALSE, fig.width=8, fig.height=6}
+box_wes <- c(wes_palette('Zissou1')[1], wes_palette('Zissou1')[3])
+
+ggplot(school_df, aes(x=avg_proficiency, y=school_income_estimate,
+                      fill=blhi_dominant)) +
+  geom_boxplot(alpha=0.4) + theme_classic() + coord_flip() +
+  theme(legend.position=c(0.98, 0.9), legend.justification='right') +
+  labs(x = 'Average Proficiency', y = 'School Income Estimte',
+       title = 'Distribution of Average Proficiency by School Income Estimate and Race') +
+  scale_fill_manual(name=NULL, labels=c('Asian/White', 'Black/Hispanic'),
+                      values=custom_wes) +
+  scale_color_manual(name=NULL, labels=c('Asian/White', 'Black/Hispanic'), 
+                      values=custom_wes)
+```
+
+```{r warning=FALSE, fig.width=8, fig.height=6}
+filter(school_df, attendance_rate > 0) %>%
+  ggplot(aes(x = attendance_rate, y = avg_proficiency, 
+             color = chronically_absent)) + 
+  geom_point() + theme_classic() + 
+  labs(title='Average Proficiency vs. Attendance Rate by Chronically Absent') +
+  scale_color_gradientn(colors=wes_palette("Zissou1", 100, type = "continuous"))
+```
+
+```{r warning=FALSE, fig.width=8, fig.height=6}
+scat1 <- ggplot(school_df, aes(x=percent_ell, y=avg_proficiency,
+                               color = economic_need_index)) + 
+  geom_point(size=0.5) + scale_x_sqrt() + theme_classic() +
+  guides(colour=guide_colourbar(barwidth=30, title.position='top')) +
+  scale_color_gradientn(colors=wes_palette("Zissou1", 100, type = "continuous"))
+scat2 <- ggplot(filter(school_df, attendance_rate > 0), 
+                aes(x = attendance_rate, y = avg_proficiency,
+                    color = economic_need_index)) +
+  geom_point(size=0.5) + theme_classic() + labs(y = '') +
+  guides(colour=guide_colourbar(barwidth=30, title.position='top')) +
+  scale_color_gradientn(colors=wes_palette("Zissou1", 100, type = "continuous"))
+scat3 <- ggplot(filter(school_df, rigorous_instruction > 0), 
+       aes(x = rigorous_instruction, y = avg_proficiency,
+           color = economic_need_index)) + 
+  geom_point(size=0.5) + theme_classic() + labs(y = '') +
+  guides(colour=guide_colourbar(barwidth=30, title.position='top')) +
+  scale_color_gradientn(colors=wes_palette("Zissou1", 100, type = "continuous"))
+scat4 <- ggplot(filter(school_df, fam_com_ties > 0), 
+       aes(x = fam_com_ties, y = avg_proficiency,
+           color = economic_need_index)) + 
+  geom_point(size=0.5) + theme_classic() +
+  guides(colour=guide_colourbar(barwidth=30, title.position='top')) +
+  scale_color_gradientn(colors=wes_palette("Zissou1", 100, type = "continuous"))
+scat5 <- ggplot(filter(school_df, collab_teachers > 0),
+              aes(x = collab_teachers, y = avg_proficiency,
+                  color = economic_need_index)) + 
+  geom_point(size=0.5) + theme_classic() + labs(y = '') +
+  guides(colour=guide_colourbar(barwidth=30, title.position='top')) +
+  scale_color_gradientn(colors=wes_palette("Zissou1", 100, type = "continuous"))
+scat6 <- ggplot(filter(school_df, chronically_absent < 1), 
+                aes(x = chronically_absent, y = avg_proficiency,
+                    color = economic_need_index)) + 
+  geom_point(size=0.5) + theme_classic() + labs(y = '') +
+  guides(colour=guide_colourbar(barwidth=30, title.position='top')) +
+  scale_color_gradientn(colors=wes_palette("Zissou1", 100, type = "continuous"))
+
+ggarrange(scat1, scat2, scat3, scat4, scat5, scat6, common.legend=TRUE)
+```
+
+The final step is to remove the columns which will not be used for any further analysis or model prediction. These variables are qualitative and are unique to each data point, thus they will not be entirely useful in further analysis. While these could have been removed earlier, they were left in for potential use during exploratory analysis. The variable which states whether or not black and hispanic students are the dominant group, `blhi_dominant`, is also being removed as it is reliant on existing predictors. Rows for which `avg_proficiency` is N/A will also be dropped, as these can not provide any help in training or testing the model.
+
+```{r}
+school_final <- school_df %>%
+  select(-school_name, -location_code, -district, -latitude, -longitude, 
+         -address_full, -city, -zip, -blhi_dominant) %>%
+  filter(is.na(avg_proficiency) == FALSE)
+```
+
+# Model Setup
+
+Now that we know the relationships between the variables and their overall structure, we can set up the model. The data will first be split into a training and testing set, then further split into 10 folds for cross validation, and finally the recipe will be created.
+
+## Splitting the Data
+
+The first step is splitting the data into training and testing segments. This will be done using a 4:1 split, which will be suitable due to the large number of data points allowing for a high number of values to train the model on while still maintaining a significant set for training the data. The data will be stratified by the response variable, `avg_proficiency`.
+
+```{r}
+# Splitting the Data
+school_split <- initial_split(school_final, prop=0.8, strata=avg_proficiency)
+school_train <- training(school_split) # Training Set
+school_test <- testing(school_split) # Testing Set
+```
+
+## Cross-Fold Validation
+
+Next, we will set up the ten folds which will be used for cross validation. This is done in the case that there is imbalanced data, and can lead to more accurate training data sets. We will again stratify by `avg_proficiency`.
+
+```{r}
+# K-Fold Cross validation
+school_folds <- vfold_cv(school_train, v=10, strata=avg_proficiency) 
+```
+
+## Recipe Creation
+
+Finally, we will create the recipe which will be used as the basis for the modelling. Besides `avg_proficiency`, the remaining variables will be the predictors. First, all of the nominal predictors will be set as dummy variables, which in this case is just `community_school`. Then, with the exception of `percent_blhi`, the racial demographic data will be removed as these have obvious correlations with each other which could skew the predictions. Next, since it contains the most missing values and is an important predictor, values will be imputed for `school_income_estimate` using `economic_need_index` and `community_school`. An interaction step will then be added, to accommodate the existing correlations between `community_school` and `school_income_estimate`, `economic_need_index` and `school_income_estimate`, and `attendance_rate` and `chronically_absent`. Finally, the numeric predictors will be normalized so that the data can accurately be modeled.
+
+```{r}
+school_recipe <- recipe(avg_proficiency ~., data=school_train) %>%
+  step_dummy(all_nominal_predictors()) %>% # Dummy Variables (Community School)
+  step_impute_linear(school_income_estimate, # Imputes missing income estimates
+                     impute_with=imp_vars(economic_need_index, starts_with('community'))) %>%
+  step_interact(~ starts_with('community'):school_income_estimate + # Interactions between
+                  economic_need_index:school_income_estimate + # Correlated variables
+                  attendance_rate:chronically_absent) %>%
+  step_rm(c('math_proficiency', 'ela_proficiency', 'percent_asian', # Removing unused and
+            'percent_black', 'percent_hispanic', 'percent_white', # Correlated variables
+            'school_income_estimate', 'attendance_rate', 'chronically_absent',
+            'economic_need_index')) %>%
+  step_normalize(all_numeric_predictors()) # Centering and scaling numeric predictors
+```
+
+# Model Creation
+
+Now that the data has been split and the recipe created, the next step can be taken in creating the models and fitting it to the data. Four primary models will be tested, those being:
+
+1.  Linear Regression
+2.  ElasticNet Regression
+3.  Boosted Tree Model
+4.  Random-Forest Tree Model
+5.  Support Vector Machines
+
+Following this, the metrics of each model will be compared to determine which model will best represent the data.
+
+## Linear Regression
+
+The first model that will be fitted is a simple linear regression model. While it is likely that this will not perform as well as the models tested later on, it is still interesting to test it out and see how it does perform overall. We will begin by setting the engine and creating the workflow, and then fitting the model to the original training set. The folds will not be used for linear regression.
+
+```{r}
+lm_model <- linear_reg() %>%
+  set_engine('lm')
+
+lm_wkflow <- workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(school_recipe)
+
+lm_fit <- fit(lm_wkflow, school_train)
+```
+
+### Metrics
+
+Next we will test how the model performs by using `predict()` with both the training and testing sets. For each model, there will be three metrics tested as well as two graphs which represent how the model fits the training and testing data.
+
+```{r}
+school_metrics <- metric_set(rmse, rsq)
+
+lm_train_res <- predict(lm_fit, new_data = school_train %>% select(-avg_proficiency)) %>%
+  cbind(school_train %>% select(avg_proficiency))
+lm_test_res <- predict(lm_fit, new_data = school_test %>% select(-avg_proficiency)) %>%
+  cbind(school_test %>% select(avg_proficiency))
+
+lm_metrics <- bind_rows(
+  cbind(school_metrics(lm_train_res, truth=avg_proficiency, estimate=.pred), 
+        set='Training'), 
+  cbind(school_metrics(lm_test_res, truth=avg_proficiency, estimate=.pred), 
+        set='Testing'),
+)
+
+lm_metrics
+```
+
+Based on this data, this is actually a fairly well performing model, and this will form the basis of what we will test our future models against. If we can improve the R^2^ value in any of the future models used, they will be taken as the new basis. The plots below show that the model is fairly accurate, and predicts most of the values of proficiency within an acceptable range, but it begins to perform less well with higher proficiency levels.
+
+```{r fig.width=8, fig.height=4}
+lm_plot1 <- lm_train_res %>% 
+  ggplot(aes(x=.pred, y=avg_proficiency)) +
+  geom_point(alpha = 0.2) +
+  geom_abline(lty = 2) +
+  labs(title = 'Training') +
+  theme_classic() + coord_obs_pred()
+
+lm_plot2 <- lm_test_res %>%
+  ggplot(aes(x=.pred, y=avg_proficiency)) +
+  geom_point(alpha = 0.2) +
+  geom_abline(lty = 2) +
+  labs(title = 'Testing') +
+  theme_classic() + coord_obs_pred()
+
+ggarrange(lm_plot1, lm_plot2)
+```
+
+## ElasticNet Model
+
+Next we will an ElasticNet model, which is a mixture of the ridge and lasso models. We will tune the `penalty` and `mixture` parameters to determine what makes up the best overall model. The range of each was chosen to reduce overfitting while maximizing the R^2^ value.
+
+```{r}
+rid_las_spec <- linear_reg(penalty = tune(), mixture = tune()) %>%
+  set_mode('regression') %>%
+  set_engine('glmnet')
+
+rid_las_wkflow <- workflow() %>%
+  add_recipe(school_recipe) %>%
+  add_model(rid_las_spec)
+
+rid_las_grid <- grid_regular(
+  penalty(range = c(-10, 10)), mixture(range = c(0, 1)), levels = 20
+)
+```
+
+Below is the tuning grid, which has been saved for efficiency.
+
+```{r, eval=FALSE}
+rid_las_tune_res <- tune_grid(
+  rid_las_wkflow,
+  resamples = school_folds,
+  grid = rid_las_grid
+)
+
+save(rid_las_tune_res, file='models/rid_las_tune_results.R')
+```
+
+Here is the `autoplot`, which shows how the parameters are chosen.
+
+```{r}
+load(file='models/rid_las_tune_results.R')
+
+autoplot(rid_las_tune_res) +
+  theme_classic()
+```
+
+Now we choose the best set of parameters and fit them to the data. Root mean squared error (RMSE) will be used to pick the best model.
+
+```{r}
+best_rid_las <- select_best(rid_las_tune_res, metric='rsq')
+
+rid_las_final_fit <- finalize_workflow(rid_las_wkflow, best_rid_las) %>%
+  fit(data = school_train)
+```
+
+### Metrics
+
+The metrics below show how the model performed overall. It performed slightly better than the previous model did on both the training and testing sets.
+
+```{r}
+rid_las_train_results <- augment(rid_las_final_fit, new_data = school_train)
+rid_las_test_results <- augment(rid_las_final_fit, new_data = school_test)
+
+rid_las_results <- bind_rows(
+  cbind(school_metrics(rid_las_train_results, avg_proficiency, estimate=.pred),
+        set='training'),
+  cbind(school_metrics(rid_las_test_results, avg_proficiency, estimate=.pred),
+        set='testing')
+)
+
+rid_las_results
+```
+
+This can even be seen in the plots below, which seem to show that the data fits the line better than the previous one, but again, the predictions seem to be less accurate for higher values of proficiency.
+
+```{r, ridge_lasso_plots, fig.width=8, fig.height=4}
+rid_las_plot1 <- rid_las_train_results %>% 
+  ggplot(aes(x=.pred, y=avg_proficiency)) +
+  geom_point(alpha = 0.2) +
+  geom_abline(lty = 2) +
+  labs(title = 'Training') +
+  theme_classic() + coord_obs_pred()
+
+rid_las_plot2 <- rid_las_test_results %>%
+  ggplot(aes(x=.pred, y=avg_proficiency)) +
+  geom_point(alpha = 0.2) +
+  geom_abline(lty = 2) +
+  labs(title = 'Testing') +
+  theme_classic() + coord_obs_pred()
+
+ggarrange(rid_las_plot1, rid_las_plot2)
+```
+
+## Tree-Based Models
+
+Next, we will move onto tree-based models where two different types will be fitted. First, the boosted tree method will be used, then the random forest tree. The parameters `mtry`, `trees`, and `min_n` will be used for both of these models and tuned with the same value, although they may differ in the final selection.
+
+-   `mtry` determines the number of predictors which will be sampled at each split of the tree
+
+-   `trees` is the total number of separate trees which will be tested
+
+-   `min_n` is the minimum number of data points which will be sampled at each split of the tree
+
+### Boosted Tree
+
+Boosted tree modelling works by building each tree one at a time, then determining what works, and what does not. This model took the longest to run, likely due to the method in which it builds the model. Going through each iteration one at at time means that with more tuning it could perhaps be a more efficient model, but the results will show why in this case that may not be the best approach.
+
+```{r}
+boosted_spec <- boost_tree(mtry=tune(),trees=tune(), min_n=tune()) %>%
+  set_engine('xgboost') %>%
+  set_mode('regression')
+
+boosted_wkflow <- workflow() %>%
+  add_model(boosted_spec) %>%
+  add_recipe(school_recipe)
+
+boosted_grid <- grid_regular(mtry(range=c(3, 19)), trees(range=c(10, 2000)), 
+                             min_n(range=c(100, 873)), levels=10)
+```
+
+Below is the tuning grid, which has been saved for a quicker run time.
+
+```{r eval=FALSE}
+boost_tune_res <- tune_grid(
+  boosted_wkflow,
+  resamples=school_folds,
+  grid=boosted_grid
+)
+
+save(boost_tune_res, file='models/boost_tune_res.R')
+```
+
+Here is the `autoplot`, showing how the R^2^ value begins to quickly degrade when the values for each parameter go up.
+
+```{r fig.width=10}
+load(file='models/boost_tune_res.R')
+
+autoplot(boost_tune_res) +
+  theme_minimal()
+```
+
+Now before fitting the data, the best set of parameters much be selected. We are using RMSE to select the best ones as in the case of this data, using R^2^ tended to lead to more overfitting.
+
+```{r}
+boosted_best <- select_best(boost_tune_res, metric='rmse')
+
+boosted_final <- finalize_workflow(boosted_wkflow, boosted_best)
+boosted_final_fit <- fit(boosted_final, school_train)
+```
+
+### Metrics
+
+Now below we have the R^2^ and RMSE. Looking at this, it seems that the model has been overfitted to the training data, but has provided some slight improvement on the testing data. After attempting to tune this model in a way that leads to less overfitting it was actually determined that the final model may benefit from overfitting on the training data. Less overfit models, led to far lower R^2^ values overall.
+
+```{r}
+boosted_train_results <- augment(boosted_final_fit, new_data=school_train)
+boosted_test_results <- augment(boosted_final_fit, new_data=school_test)
+
+boosted_metrics <- bind_rows(
+  cbind(boosted_train_results %>%
+  school_metrics(truth=avg_proficiency, estimate=.pred), set='training'), 
+  cbind(boosted_test_results %>%
+  school_metrics(truth=avg_proficiency, estimate=.pred), set='testing'),
+)
+
+boosted_metrics
+```
+
+These plots also seem to reinforce the observations discussed above.
+
+```{r, fig.width=8, fig.height=4}
+boosted_plot1 <- boosted_train_results %>% 
+  ggplot(aes(x=.pred, y=avg_proficiency)) +
+  geom_point(alpha = 0.2) +
+  geom_abline(lty = 2) +
+  labs(title = 'Training') +
+  theme_classic() + coord_obs_pred()
+
+boosted_plot2 <- boosted_test_results %>%
+  ggplot(aes(x=.pred, y=avg_proficiency)) +
+  geom_point(alpha = 0.2) +
+  geom_abline(lty = 2) +
+  labs(title = 'Testing') +
+  theme_classic() + coord_obs_pred()
+
+ggarrange(boosted_plot1, boosted_plot2)
+```
+
+### Random Forest Tree
+
+Next will be the random forest tree, which selects the best model while independently running each tree.
+
+```{r}
+rand_for_spec <- rand_forest(mtry=tune(), trees=tune(), min_n=tune()) %>%
+  set_engine('randomForest', importance=T) %>%
+  set_mode('regression')
+
+rand_for_wkflow <- workflow() %>%
+  add_model(rand_for_spec) %>%
+  add_recipe(school_recipe)
+
+rand_for_grid <- grid_regular(
+  mtry(range=c(3, 19)), trees(range=c(10, 2000)), min_n(range=c(100, 873)),
+  levels=10
+)
+```
+
+The tuning grid has again been saved for efficiency.
+
+```{r eval=FALSE}
+rand_for_tune_res <- tune_grid(
+  rand_for_wkflow, 
+  resamples=school_folds,
+  rand_for_grid
+)
+
+save(rand_for_tune_res, file='models/rand_for_tune_res.R')
+```
+
+The model is loaded in and put through `autoplot`.
+
+```{r}
+load(file='models/rand_for_tune_res.R')
+
+autoplot(rand_for_tune_res) +
+  theme_minimal()
+```
+
+Selecting the best set of parameters and fitting the model to the training set.
+
+```{r}
+rand_for_best <- select_best(rand_for_tune_res, metric='rsq')
+
+rand_for_final <- finalize_workflow(rand_for_wkflow, rand_for_best)
+rand_for_final_fit <- fit(rand_for_final, school_train)
+```
+
+### Metrics
+
+The metrics below again seem to point to overfitting on the training set, but this time with a notable improvement on how it fits the testing set. Despite the overfitting, the improvements to the overall fit of the model seem to imply that this model could work better on new data, as it has with the testing set.
+
+```{r}
+rf_train_results <- augment(rand_for_final_fit, new_data=school_train)
+rf_test_results <- augment(rand_for_final_fit, new_data=school_test)
+
+rf_metrics <- bind_rows(
+  cbind(rf_train_results %>%
+  school_metrics(truth=avg_proficiency, estimate=.pred), set='training'), 
+  cbind(rf_test_results %>%
+  school_metrics(truth=avg_proficiency, estimate=.pred), set='testing'),
+)
+
+rf_metrics
+```
+
+The plots below display again that the model has improved, as these points seem to fit the line better than those in previous plots.
+
+```{r, fig.width=8, fig.height=4}
+rand_for_plot1 <- rf_train_results %>% 
+  ggplot(aes(x=.pred, y=avg_proficiency)) +
+  geom_point(alpha = 0.2) +
+  geom_abline(lty = 2) +
+  labs(title = 'Training') +
+  theme_classic() + coord_obs_pred()
+
+rand_for_plot2 <- rf_test_results %>%
+  ggplot(aes(x=.pred, y=avg_proficiency)) +
+  geom_point(alpha = 0.2) +
+  geom_abline(lty = 2) +
+  labs(title = 'Testing') +
+  theme_classic() + coord_obs_pred()
+
+ggarrange(rand_for_plot1, rand_for_plot2)
+```
+
+## Support Vector Machines
+
+The final model tested will be an SVM model. Although it is primarily used for classification, it can be used for regression and will be tested in this case. The specific SVM being used is using a radial basis function as its kernel which aims to capture non-linearity in the data. This model is more straightforward than the ElasticNet or either of the tree models and does not require tuning.
+
+```{r}
+svm_spec <- svm_rbf() %>%
+  set_mode('regression') %>%
+  set_engine('kernlab', scale=FALSE)
+
+svm_wkflow <- workflow() %>%
+  add_model(svm_spec) %>%
+  add_recipe(school_recipe)
+
+svm_fit <- fit(svm_wkflow, school_train)
+```
+
+### Metrics
+
+```{r}
+svm_train_results <- augment(svm_fit, new_data=school_train)
+svm_test_results <- augment(svm_fit, new_data=school_test)
+
+svm_metrics <- bind_rows(
+  cbind(svm_train_results %>%
+  school_metrics(truth=avg_proficiency, estimate=.pred), set='training'),
+  cbind(svm_test_results %>%
+  school_metrics(truth=avg_proficiency, estimate=.pred), set='testing')
+)
+
+svm_metrics
+```
+
+Looking at the metrics above there is again improvement on the data, but with slight overfitting. This is at a much lower scale than what was seen with either of the tree models but is still notably there. This model has performed better than the linear or ElasticNet models on the testing set.
+
+```{r, fig.width=8, fig.height=4}
+svm_plot1 <- svm_train_results %>% 
+  ggplot(aes(x=.pred, y=avg_proficiency)) +
+  geom_point(alpha = 0.2) +
+  geom_abline(lty = 2) +
+  labs(title = 'Training') +
+  theme_classic() + coord_obs_pred()
+
+svm_plot2 <- svm_test_results %>%
+  ggplot(aes(x=.pred, y=avg_proficiency)) +
+  geom_point(alpha = 0.2) +
+  geom_abline(lty = 2) +
+  labs(title = 'Testing') +
+  theme_classic() + coord_obs_pred()
+
+ggarrange(svm_plot1, svm_plot2)
+```
+
+# Model Selection
+
+There are a few factors which should be taken into consideration when deciding which model to use for applications. Whether or not the model has been overfit on the training data, and the R^2^ value of the model on the testing data. Based on these factors, there are two models which I think should be used. The **ElasticNet** model is the best choice when it comes to a model which does not overfit. The SVM model could also be used here, but it does seem to overfit on the training data at a negligible improvement to overall model on new data.
+
+Now, taking into consideration the tree-based models, the **Random Forest Tree** model also performs very well on the data. While choosing a model which overfits is not always the best choice, in this case I think it is a reasonable option and thus the **Random Forest Tree** will be selected as the best model. It has a notable improvement on the testing data which has not been seen anywhere else in the modelling stages.
+
+Using this, we will look into the variable importance plot to determine which variables contributed the most to the fitting of this model, and thus what can be done to improve the average proficiency of schools test performance.
+
+```{r}
+rand_for_final_fit %>%
+  extract_fit_parsnip() %>%
+  vip() +
+  theme_classic()
+```
+
+This plot suggests that the most important indicators of `avg_performance` are `attendance_rate_x_chronically_absent`, which is the interaction between the two separate predictors indicated there and `percent_blhi`, or the combined percentages of black and hispanic students at any given school. In the case of attendance rate, this is a bit more straightforward. Both `attendance_rate` and `chronically_absent` are correlated with `avg_proficiency` and the relationship was preserved, just in a combined format. This implies that if a school has a higher attendance rate, it is likely to see better performance on the assessments, whereas a school with a high level of chronically absent students would see the opposite.
+
+When it comes to `percent_blhi` the reasoning for its importance is likely much deeper. This is an important predictor as seen in the exploratory data analysis, as there is a large difference in the overall scores between schools which have more black and hispanic students, and those with white and Asian students. This could be attributed to a variety of factors, but from the information gathered in the EDA step, I would attribute it to black and hispanic dominant schools being in lower income areas, receiving less funding, and attention from the department of education overall.
+
+# Conclusion
+
+In order to improve these scores, my recommendation would be to firstly work to improve attendance rates overall. If more students are in school, then more students will do well on the examinations. This will lead to an average increase in these scores. Next, it would be improving the income gaps between schools and focusing on the schools which are not primarily white and Asian, and instead working on improving the black and hispanic dominant schools. Race should not play such a large role in how students perform on these assessments, but unfortunately it does and will need to be addressed in order to see overall improvement in proficiency.
+
+# Addendum
+
+This section is added to display the codes for the map of NYC seen at the top of this document.
+
+```{r warning=FALSE, message=FALSE}
+P45 <- createPalette(
+  45,  c(wesanderson::wes_palette('Zissou1')[1], wesanderson::wes_palette('Zissou1')[3],
+         wesanderson::wes_palette('Zissou1')[5])
+)
+  
+P45 <- as.vector(t(matrix(P45)))
+
+r <- GET('http://data.beta.nyc//dataset/0ff93d2d-90ba-457c-9f7e-39e47bf2ac5f/resource/35dd04fb-81b3-479b-a074-a27a37888ce7/download/d085e2f8d0b54d4590b1e7d1f35594c1pediacitiesnycneighborhoods.geojson')
+
+nycmap <- rgdal::readOGR(content(r, 'text'), 'OGRGeoJSON', verbose=F)
+nycmaps_df <- tidy(nycmap)
+
+school_small <- read_csv('data/nycschooldata.csv', show_col_types=FALSE) %>%
+  clean_names() %>% 
+  select(longitude, latitude, city) %>%
+  mutate(City = str_to_title(city))
+
+count_df <- school_small %>% 
+  group_by(city) %>% 
+  count() %>%
+  arrange(desc(n)) %>%
+  cbind(col=P45)
+
+map_df <- merge(x=school_small, y=count_df, by='city') %>%
+  arrange(desc(n))
+
+nycplot <- ggplot() +
+  geom_polygon(data=nycmaps_df, aes(x=long, y=lat, group=group),
+               color='white', fill='lightgrey') +
+  geom_point(data=map_df, color=map_df$col,
+             mapping=aes(x = longitude, y = latitude, color = city,
+                         label=City)) +
+  labs(title='Schools in the New York City Area by Neighborhood') +
+  theme(panel.background = element_blank(), legend.position = 'none',
+        axis.title.x = element_blank(), axis.title.y = element_blank(), 
+        axis.text.x = element_blank(), axis.text.y = element_blank(),
+        axis.ticks.x = element_blank(), axis.ticks.y = element_blank())
+
+nyc_map <- ggplotly(nycplot, tooltip='City')
+
+saveRDS(nyc_map, "plots/nycplot.rds")
+```

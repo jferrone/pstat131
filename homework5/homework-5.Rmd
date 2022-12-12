@@ -90,7 +90,7 @@ pokemon_test <- testing(pokemon_split)
 Next, use *v*-fold cross-validation on the training set. Use 5 folds. Stratify the folds by `type_1` as well. *Hint: Look for a `strata` argument.* Why might stratifying the folds be useful?
 
 ```{r}
-pokemon_folds <- vfold_cv(pokemon_train, v=5)
+pokemon_folds <- vfold_cv(pokemon_train, v=5, strata=type_1)
 ```
 
 ### Exercise 4
@@ -105,7 +105,7 @@ Set up a recipe to predict `type_1` with `legendary`, `generation`, `sp_atk`, `a
 pokemon_rec <- pokemon_train %>% 
   recipe(type_1 ~ legendary + generation + sp_atk + attack + speed + defense + hp + sp_def) %>%
   step_dummy(all_nominal_predictors()) %>% # Step Dummy
-  step_normalize() # Center AND Scale
+  step_normalize(all_numeric_predictors()) # Center AND Scale
 ```
 
 ### Exercise 5
@@ -128,11 +128,13 @@ pokemon_workflow <- workflow() %>%
 pen_mix_grid <- grid_regular(
   penalty(range = c(-5, 5)), mixture(range = c(0, 1)), levels = 10
   )
+
+pen_mix_grid
 ```
 
 How many total models will you be fitting when you fit these models to your folded data?
 
-Based on the existence of 100 rows, I am assuming that this would be one model per each set of parameters, thus 100 total models.
+Based on the existence of 100 rows, I am assuming that this would be one model per each set of parameters, then five times each model. Thus 500 total models.
 
 ### Exercise 6
 
@@ -186,7 +188,7 @@ test_results %>%
 Then create plots of the different ROC curves, one per level of the outcome. Also make a heat map of the confusion matrix.
 
 ```{r}
-train_results %>%
+test_results %>%
   roc_curve(type_1, .pred_Bug:.pred_Water) %>%
   autoplot()
 ```
